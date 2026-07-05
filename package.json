@@ -1,0 +1,16 @@
+{
+  "name": "nastenka-live",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kolaborativni post-it nastenka s prihlasenim vice uzivatelu",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "users:import": "node scripts/import-users.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}

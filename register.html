@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Registrace - Nástěnka Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&family=Caveat:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <section class="login-screen">
+      <form id="register-form" class="login-form" autocomplete="off">
+        <h1>Registrace</h1>
+        <p>Vytvoř si účet. Role se nastavuje ručně v souboru uživatelů.</p>
+
+        <label>
+          Uživatelské jméno
+          <input id="register-username" type="text" maxlength="30" required placeholder="Například: Veronika" />
+        </label>
+
+        <label>
+          E-mail
+          <input id="register-email" type="email" maxlength="120" required placeholder="Například: veronika@firma.cz" />
+        </label>
+
+        <label>
+          Heslo
+          <input id="register-password" type="password" minlength="6" maxlength="120" required placeholder="Minimálně 6 znaků" />
+        </label>
+
+        <button type="submit">Vytvořit účet</button>
+        <a class="register-link" href="/">Zpět na přihlášení</a>
+        <p id="register-error" class="login-error" role="alert"></p>
+      </form>
+    </section>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="./register.js" type="module"></script>
+  </body>
+</html>

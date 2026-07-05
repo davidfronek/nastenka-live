@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pomocný formulář uživatele - Nástěnka Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&family=Caveat:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <section class="login-screen">
+      <form id="manual-user-form" class="login-form" autocomplete="off">
+        <h1>Pomocný formulář uživatele</h1>
+        <p>
+          Tento formulář není nikde odkazovaný. Vygeneruje JSON záznam (včetně hash hesla),
+          který můžeš ručně vložit do souboru data/users.json.
+        </p>
+        <p>Otevři ho přes adresu http://localhost:3099/manual-user-template.html.</p>
+
+        <label>
+          Uživatelské jméno
+          <input id="manual-username" type="text" maxlength="30" required />
+        </label>
+
+        <label>
+          E-mail
+          <input id="manual-email" type="email" maxlength="120" required />
+        </label>
+
+        <label>
+          Heslo
+          <input id="manual-password" type="password" minlength="6" maxlength="120" required />
+        </label>
+
+        <label>
+          Role
+          <select id="manual-role">
+            <option value="user" selected>user</option>
+            <option value="admin">admin</option>
+          </select>
+        </label>
+
+        <p>Výchozí barva uživatele se nastaví automaticky na #ff5d43.</p>
+
+        <button type="submit">Vygenerovat JSON záznam</button>
+        <button id="copy-json-btn" class="secondary-btn compact-btn" type="button">Zkopírovat JSON</button>
+        <p id="manual-status" class="login-error" role="alert"></p>
+
+        <label>
+          Výstup
+          <textarea id="manual-output" readonly></textarea>
+        </label>
+      </form>
+    </section>
+
+    <script src="./manual-user-template.js" type="module"></script>
+  </body>
+</html>

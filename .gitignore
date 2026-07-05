@@ -1,0 +1,5 @@
+node_modules/
+.env
+.env.*
+data/users.json
+data/board-snapshots*.json
