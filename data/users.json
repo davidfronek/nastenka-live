@@ -1,0 +1,20 @@
+[
+  {
+    "id": "1783159711298-eoe6e1",
+    "username": "David F.",
+    "email": "david.fronek@rb.cz",
+    "role": "admin",
+    "passwordHash": "4a5257e792a852f6eb48cce3c081138d:270f7c22f5a3f2e3128e4629d17ab274928b643171543c4be37dc18e7fb76a3f23fd3e2a7614600b6b541a2088863e43c3c9756420daf93e5a52f6d0ea3265b8",
+    "defaultColor": "#ff5d43",
+    "createdAt": "2026-07-04T10:08:31.298Z"
+  },
+  {
+    "id": "1783159711322-6227d6",
+    "username": "demo-user",
+    "email": "demo.user@example.com",
+    "role": "user",
+    "passwordHash": "fe2cd8dd7d74c668880b83bf09fbb2cf:d15b00420a48eaf4f93debba38cf8987ece073dc68d5654b95da3678e542c129448a3509f81a2a4dcb2a9a32275fbd441db8a57aedc291fb83e1952d0b34e3c1",
+    "defaultColor": "#ff5d43",
+    "createdAt": "2026-07-04T10:08:31.322Z"
+  }
+]
