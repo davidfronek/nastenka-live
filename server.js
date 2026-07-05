@@ -1179,6 +1179,7 @@ if (restoredSnapshot) {
   console.log(
     `Obnoven snapshot ${restoredSnapshot.id} (${restoredSnapshot.noteCount} listku, ${restoredSnapshot.textCount} textu) z ${restoredSnapshot.createdAt}.`
   );
+  module.exports = app;
 }
 
 const PORT = process.env.PORT || 3099;
