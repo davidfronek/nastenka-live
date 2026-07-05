@@ -3,3 +3,4 @@ node_modules/
 .env.*
 data/users.json
 data/board-snapshots*.json
+data/activity/

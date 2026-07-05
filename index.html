@@ -105,6 +105,7 @@
                     <textarea id="note-text" required placeholder="Například: Finální kontrola textu a předání klientovi"></textarea>
                   </label>
                   <div class="note-text-actions">
+                    <div class="emoji-palette" aria-label="Vložit smajlík do lístku"></div>
                     <button id="paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
                   </div>
 
@@ -229,6 +230,11 @@
                   <button id="mark-selected-done-btn" class="secondary-btn action-btn" type="button">Označit vybrané jako hotové</button>
                   <button id="save-session-btn" class="secondary-btn action-btn" type="button">Uložit snapshot</button>
                 </div>
+                <div class="action-group action-group-safe">
+                  <p class="control-title">Obnovení zálohy</p>
+                  <select id="restore-snapshot-select" aria-label="Vybrat snapshot k obnovení"></select>
+                  <button id="restore-snapshot-btn" class="secondary-btn action-btn" type="button">Obnovit snapshot</button>
+                </div>
                 <div class="action-group action-group-danger">
                   <p class="control-title">Mazání</p>
                   <button id="delete-selected-btn" class="danger-btn action-btn" type="button">Smazat vybrané</button>
@@ -263,6 +269,7 @@
                   placeholder="Například: Finální kontrola textu a předání klientovi"
                   aria-label="Text nového lístku"
                 ></textarea>
+                <div class="emoji-palette" aria-label="Vložit smajlík na plochu"></div>
                 <div id="board-inline-note-fields" class="board-inline-note-fields">
                   <div class="note-text-actions">
                     <button id="board-inline-paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
@@ -355,8 +362,9 @@
       <div class="note-preview-backdrop" data-close-preview="true"></div>
       <article class="note-preview-sheet">
         <button id="note-preview-close" class="note-preview-close" type="button" aria-label="Zavřít náhled">
-          <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-            <path d="M7.4 6l4.6 4.6L16.6 6 18 7.4 13.4 12l4.6 4.6-1.4 1.4-4.6-4.6-4.6 4.6L6 16.6 10.6 12 6 7.4z"></path>
+          <svg viewBox="0 0 24 24" role="presentation" focusable="false" aria-hidden="true">
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <line x1="18" y1="6" x2="6" y2="18"></line>
           </svg>
         </button>
         <div id="note-preview-view" class="note-preview-view">
@@ -373,6 +381,7 @@
             Zadání
             <textarea id="note-preview-edit-text" maxlength="300" required></textarea>
           </label>
+          <div class="emoji-palette" aria-label="Vložit smajlík do upravovaného lístku"></div>
 
           <div class="inline-fields">
             <label>

@@ -10,6 +10,13 @@ const SCALE_STEP = 5;
 const PREVIEW_ANIMATION_MS = 220;
 const NOTE_HOVER_PREVIEW_DELAY_MS = 3000;
 const ALIGN_THRESHOLD_PX = 6;
+const EMOJI_OPTIONS = [
+  "🙂", "😀", "😄", "😁", "😆", "😂", "🤣", "😊", "😉", "😍", "🤩", "😎",
+  "🤔", "🙄", "😬", "😅", "😇", "😴", "😡", "😢", "😭", "😱", "🤯", "🥳",
+  "👍", "👎", "👏", "🙌", "🙏", "🤝", "💪", "👀", "💡", "✅", "☑️", "❌",
+  "⚠️", "❗", "❓", "⭐", "🔥", "🚀", "🎯", "🏆", "📌", "📎", "📝", "📅",
+  "⏰", "🔔", "💬", "📣", "❤️", "💙", "💚", "💛", "💜", "☕", "🍀", "🎉"
+];
 
 let selectedNoteColor = noteColors[0];
 let boardInlineSelectedColor = noteColors[0];
@@ -99,6 +106,8 @@ const deleteAllBtn = document.querySelector("#delete-all-btn");
 const deleteSelectedBtn = document.querySelector("#delete-selected-btn");
 const markSelectedDoneBtn = document.querySelector("#mark-selected-done-btn");
 const saveSessionBtn = document.querySelector("#save-session-btn");
+const restoreSnapshotSelect = document.querySelector("#restore-snapshot-select");
+const restoreSnapshotBtn = document.querySelector("#restore-snapshot-btn");
 const boardActionStatus = document.querySelector("#board-action-status");
 const sessionSaveStatus = document.querySelector("#session-save-status");
 const notePreview = document.querySelector("#note-preview");
@@ -494,6 +503,10 @@ function exitPreviewEditMode() {
   notePreviewView?.classList.remove("hidden");
 }
 
+function setCreationControlsVisibility(isActive) {
+  appShell?.classList.toggle("creating-item", isActive);
+}
+
 function applySnapState() {
   if (!snapToggle) {
     return;
@@ -510,6 +523,7 @@ function toggleSnap() {
 
 function closeDockPanel() {
   toolDockPanel?.classList.add("hidden");
+  setCreationControlsVisibility(false);
   dockToggleNote?.classList.remove("active");
   dockToggleFilter?.classList.remove("active");
   dockToggleBoard?.classList.remove("active");
@@ -543,6 +557,7 @@ function openDockSection(section) {
   dockToggleFilter?.classList.toggle("active", section === "filter");
   dockToggleBoard?.classList.toggle("active", section === "board");
   dockToggleActions?.classList.toggle("active", section === "actions");
+  setCreationControlsVisibility(section === "note");
 }
 
 function logoutLocally() {
@@ -701,6 +716,53 @@ async function loadRegisteredUsers() {
   }
 }
 
+async function loadSnapshotOptions() {
+  if (!restoreSnapshotSelect) {
+    return;
+  }
+
+  restoreSnapshotSelect.innerHTML = "";
+
+  try {
+    const response = await fetch("/api/snapshots", {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Snapshot list failed");
+    }
+
+    const payload = await response.json();
+    const snapshots = Array.isArray(payload?.snapshots) ? payload.snapshots : [];
+
+    if (snapshots.length === 0) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Žádná záloha není k dispozici";
+      restoreSnapshotSelect.append(option);
+      restoreSnapshotBtn?.setAttribute("disabled", "disabled");
+      return;
+    }
+
+    snapshots.forEach((snapshot) => {
+      const option = document.createElement("option");
+      option.value = snapshot.id;
+      const date = snapshot.createdAt ? new Date(snapshot.createdAt).toLocaleString("cs-CZ") : "bez data";
+      option.textContent = `${date} - ${snapshot.noteCount || 0} lístků, ${snapshot.textCount || 0} textů`;
+      restoreSnapshotSelect.append(option);
+    });
+    restoreSnapshotBtn?.removeAttribute("disabled");
+  } catch {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Zálohy se nepodařilo načíst";
+    restoreSnapshotSelect.append(option);
+    restoreSnapshotBtn?.setAttribute("disabled", "disabled");
+  }
+}
+
 function renderUserSelects() {
   const previousTo = toUser.value;
   const previousBoardInlineTo = boardInlineToUser?.value || "";
@@ -767,7 +829,8 @@ function renderActivity(items) {
   activityList.innerHTML = "";
   items.slice(0, 12).forEach((entry) => {
     const row = document.createElement("li");
-    row.textContent = `${entry.time} - ${entry.message}`;
+    const timestamp = [entry.date, entry.time].filter(Boolean).join(" ");
+    row.textContent = `${timestamp} - ${entry.message}`;
     activityList.append(row);
   });
 }
@@ -957,6 +1020,56 @@ async function pasteTextToNoteInput() {
   await pasteTextToTextarea(noteText, "Text byl vložen do lístku.");
 }
 
+function insertTextAtCursor(targetTextarea, text) {
+  if (!targetTextarea || !text) {
+    return;
+  }
+
+  const start = Number.isFinite(targetTextarea.selectionStart) ? targetTextarea.selectionStart : targetTextarea.value.length;
+  const end = Number.isFinite(targetTextarea.selectionEnd) ? targetTextarea.selectionEnd : start;
+  const before = targetTextarea.value.slice(0, start);
+  const after = targetTextarea.value.slice(end);
+  targetTextarea.value = `${before}${text}${after}`;
+  const nextCursor = start + text.length;
+  targetTextarea.focus();
+  targetTextarea.setSelectionRange(nextCursor, nextCursor);
+}
+
+function renderEmojiPalettes() {
+  document.querySelectorAll(".emoji-palette").forEach((paletteEl) => {
+    paletteEl.innerHTML = "";
+    EMOJI_OPTIONS.forEach((emoji) => {
+      const button = document.createElement("button");
+      button.className = "emoji-btn";
+      button.type = "button";
+      button.dataset.emoji = emoji;
+      button.textContent = emoji;
+      button.setAttribute("aria-label", `Vložit ${emoji}`);
+      paletteEl.append(button);
+    });
+  });
+}
+
+function getEmojiTargetTextarea(button) {
+  if (!button) {
+    return null;
+  }
+
+  if (button.closest("#note-form")) {
+    return noteText;
+  }
+
+  if (button.closest("#board-inline-composer")) {
+    return boardInlineText;
+  }
+
+  if (button.closest("#note-preview-edit-form")) {
+    return notePreviewEditText;
+  }
+
+  return null;
+}
+
 function getVisibleNotes() {
   const filter = assigneeFilter.value || "Vsechny";
   return notes.filter((note) => filter === "Vsechny" || note.to === filter);
@@ -1012,6 +1125,7 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
   boardInlineComposer.style.top = `${boardInlineDraftPosition.y}px`;
   boardInlineComposer.classList.remove("hidden");
   boardInlineComposer.dataset.mode = boardInlineCreateMode;
+  setCreationControlsVisibility(true);
   boardInlineText.value = "";
   if (boardInlineTitle) {
     boardInlineTitle.textContent = boardInlineCreateMode === "note" ? NOTE_FORM_TITLE : BOARD_TEXT_TITLE;
@@ -1061,6 +1175,7 @@ function closeBoardInlineComposer() {
   }
   boardInlineDraftPosition = null;
   boardInlineCreateMode = "text";
+  setCreationControlsVisibility(false);
 }
 
 function updateDonePositionHints() {
@@ -1723,6 +1838,7 @@ noteForm.addEventListener("submit", (event) => {
   fromUser.value = me.name;
   selectedNoteColor = noteColors[0];
   renderNotePalette();
+  closeDockPanel();
 });
 
 boardCanvas?.addEventListener("dblclick", (event) => {
@@ -1889,8 +2005,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
       }
 
       setPreviewEditStatus("Lístek byl upraven.");
-      exitPreviewEditMode();
-      refreshOpenPreview();
+      closeNotePreview();
     }
   );
 });
@@ -2036,12 +2151,57 @@ saveSessionBtn.addEventListener("click", () => {
   socket.emit("session:saveSnapshot");
 });
 
+restoreSnapshotBtn?.addEventListener("click", () => {
+  if (!me) {
+    setBoardActionStatus("Nejdříve se přihlas.", true);
+    return;
+  }
+
+  const snapshotId = restoreSnapshotSelect?.value || "";
+  if (!snapshotId) {
+    setBoardActionStatus("Vyber snapshot k obnovení.", true);
+    return;
+  }
+
+  const selectedLabel = restoreSnapshotSelect?.selectedOptions?.[0]?.textContent || "vybranou zálohu";
+  const ok = window.confirm(`Obnovit snapshot ${selectedLabel}? Aktuální plocha se nahradí obsahem zálohy.`);
+  if (!ok) {
+    return;
+  }
+
+  setBoardActionStatus("Obnovuji snapshot...", false);
+  socket.emit("snapshot:restore", { id: snapshotId }, (response) => {
+    if (!response?.ok) {
+      setBoardActionStatus(response?.message || "Obnovení snapshotu se nepodařilo.", true);
+      return;
+    }
+
+    setBoardActionStatus(`Snapshot obnoven (${response.noteCount || 0} lístků, ${response.textCount || 0} textů).`);
+    closeDockPanel();
+  });
+});
+
 pasteNoteTextBtn?.addEventListener("click", () => {
   pasteTextToNoteInput();
 });
 
 boardInlinePasteNoteTextBtn?.addEventListener("click", () => {
   pasteTextToTextarea(boardInlineText, "Text byl vložen do lístku na ploše.");
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const emojiButton = target.closest(".emoji-btn");
+  if (!(emojiButton instanceof HTMLElement)) {
+    return;
+  }
+
+  const emoji = emojiButton.dataset.emoji || "";
+  insertTextAtCursor(getEmojiTargetTextarea(emojiButton), emoji);
 });
 
 deleteAllBtn.addEventListener("click", () => {
@@ -2321,6 +2481,7 @@ socket.on("auth:ok", (user) => {
   fromUser.value = me.name;
   loginPassword.value = "";
   loadRegisteredUsers();
+  loadSnapshotOptions();
 });
 
 socket.on("connect", () => {
@@ -2567,6 +2728,7 @@ socket.on("session:saved", ({ createdAt, noteCount }) => {
   });
   sessionSaveStatus.textContent = `Snapshot uložen ${date}. Počet lístků: ${noteCount}.`;
   sessionSaveStatus.classList.remove("is-error");
+  loadSnapshotOptions();
 });
 
 socket.on("session:error", (message) => {
@@ -2575,6 +2737,7 @@ socket.on("session:error", (message) => {
 });
 
 renderNotePalette();
+renderEmojiPalettes();
 applyCanvasSize();
 applyGridSize();
 applyNoteScale();

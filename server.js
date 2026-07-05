@@ -21,8 +21,10 @@ const boardTexts = [];
 
 const activity = [];
 const dataDir = path.join(__dirname, "data");
+const activityDir = path.join(dataDir, "activity");
 const legacySnapshotFilePath = path.join(dataDir, "board-snapshots.json");
 const usersFilePath = path.join(dataDir, "users.json");
+const ACTIVITY_LIMIT = 30;
 const DONE_OVAL_BASE_CENTER_X = 2400;
 const DONE_OVAL_CENTER_Y = 430;
 const DONE_OVAL_RADIUS_X = 320;
@@ -42,11 +44,26 @@ function nowTime() {
   });
 }
 
+function nowDate() {
+  return new Date().toLocaleDateString("cs-CZ", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+
 function addActivity(message) {
-  activity.unshift({ id: `${Date.now()}-${Math.random()}`, message, time: nowTime() });
-  if (activity.length > 30) {
+  activity.unshift({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    message,
+    date: nowDate(),
+    time: nowTime(),
+    createdAt: new Date().toISOString()
+  });
+  if (activity.length > ACTIVITY_LIMIT) {
     activity.pop();
   }
+  saveActivityLog();
   io.emit("activity:list", activity);
 }
 
@@ -235,10 +252,46 @@ function getSnapshotFilePath(date = new Date()) {
   return path.join(dataDir, `board-snapshots-${formatSnapshotDate(date)}.json`);
 }
 
+function getActivityFolderPath(date = new Date()) {
+  return path.join(activityDir, formatSnapshotDate(date));
+}
+
+function getActivityFilePath(date = new Date()) {
+  return path.join(getActivityFolderPath(date), "feed.json");
+}
+
 function ensureSnapshotFile(filePath) {
   if (!fs.existsSync(filePath)) {
     fs.writeFileSync(filePath, "[]\n", "utf-8");
   }
+}
+
+function ensureActivityStorage(date = new Date()) {
+  const dailyActivityDir = getActivityFolderPath(date);
+  if (!fs.existsSync(dailyActivityDir)) {
+    fs.mkdirSync(dailyActivityDir, { recursive: true });
+  }
+
+  const activityFilePath = getActivityFilePath(date);
+  if (!fs.existsSync(activityFilePath)) {
+    fs.writeFileSync(activityFilePath, "[]\n", "utf-8");
+  }
+
+  return activityFilePath;
+}
+
+function listActivityFilePaths() {
+  if (!fs.existsSync(activityDir)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(activityDir, { withFileTypes: true })
+    .filter((item) => item.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(item.name))
+    .map((item) => item.name)
+    .sort((a, b) => b.localeCompare(a))
+    .map((dateFolder) => path.join(activityDir, dateFolder, "feed.json"))
+    .filter((filePath) => fs.existsSync(filePath));
 }
 
 function listSnapshotFilePaths() {
@@ -265,6 +318,7 @@ function ensureSnapshotStorage() {
   }
 
   ensureSnapshotFile(getSnapshotFilePath());
+  ensureActivityStorage();
 
   if (!fs.existsSync(usersFilePath)) {
     fs.writeFileSync(usersFilePath, "[]\n", "utf-8");
@@ -292,6 +346,119 @@ function readLatestSnapshot() {
     }
   }
   return null;
+}
+
+function listSnapshotSummaries() {
+  return listSnapshotFilePaths().flatMap((filePath) => {
+    const fileName = path.basename(filePath);
+    return readSnapshots(filePath).map((snapshot) => ({
+      id: String(snapshot?.id || ""),
+      createdAt: snapshot?.createdAt || null,
+      savedBy: sanitizeUser(snapshot?.savedBy) || "Neznámý uživatel",
+      noteCount: Array.isArray(snapshot?.notes) ? snapshot.notes.length : Number(snapshot?.noteCount || 0),
+      textCount: Array.isArray(snapshot?.texts) ? snapshot.texts.length : Number(snapshot?.textCount || 0),
+      fileName
+    }));
+  }).filter((snapshot) => snapshot.id);
+}
+
+function findSnapshotById(snapshotId) {
+  const cleanId = String(snapshotId || "").trim();
+  if (!cleanId) {
+    return null;
+  }
+
+  for (const filePath of listSnapshotFilePaths()) {
+    const snapshot = readSnapshots(filePath).find((item) => String(item?.id || "") === cleanId);
+    if (snapshot) {
+      return snapshot;
+    }
+  }
+
+  return null;
+}
+
+function restoreBoardFromSnapshot(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  const snapshotNotes = Array.isArray(snapshot.notes) ? snapshot.notes : [];
+  const snapshotTexts = Array.isArray(snapshot.texts) ? snapshot.texts : [];
+
+  notes.length = 0;
+  boardTexts.length = 0;
+
+  snapshotNotes.forEach((item, index) => {
+    const owner = sanitizeUser(item?.owner || item?.from);
+    const from = sanitizeUser(item?.from || owner);
+    const ownerEmail = sanitizeEmail(item?.ownerEmail);
+    const ownerId = sanitizeEmail(item?.ownerId || ownerEmail) || owner || from;
+
+    notes.push({
+      id: String(item?.id || `${Date.now()}-restored-note-${index}`),
+      text: sanitizeText(item?.text),
+      owner,
+      ownerEmail: ownerEmail || undefined,
+      ownerId,
+      from,
+      to: sanitizeUser(item?.to) || owner || from,
+      priority: ["Nizka", "Stredni", "Vysoka"].includes(item?.priority) ? item.priority : "Stredni",
+      deadline: String(item?.deadline || "").slice(0, 10),
+      done: Boolean(item?.done),
+      color: sanitizeColor(item?.color) || "#ffe66e",
+      x: Number.isFinite(item?.position?.x) ? item.position.x : 140,
+      y: Number.isFinite(item?.position?.y) ? item.position.y : 120,
+      returnX: Number.isFinite(item?.returnX) ? item.returnX : null,
+      returnY: Number.isFinite(item?.returnY) ? item.returnY : null
+    });
+  });
+
+  snapshotTexts.forEach((item, index) => {
+    boardTexts.push({
+      id: String(item?.id || `${Date.now()}-restored-text-${index}`),
+      text: sanitizeText(item?.text),
+      author: sanitizeUser(item?.author || item?.owner),
+      owner: sanitizeUser(item?.owner || item?.author),
+      x: Number.isFinite(item?.position?.x) ? item.position.x : 180,
+      y: Number.isFinite(item?.position?.y) ? item.position.y : 120
+    });
+  });
+
+  return {
+    id: snapshot.id,
+    createdAt: snapshot.createdAt,
+    noteCount: notes.length,
+    textCount: boardTexts.length
+  };
+}
+
+function readActivityEntries(filePath = getActivityFilePath()) {
+  ensureSnapshotStorage();
+  ensureActivityStorage();
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readLatestActivityEntries() {
+  const files = listActivityFilePaths();
+  for (const filePath of files) {
+    const entries = readActivityEntries(filePath);
+    if (entries.length > 0) {
+      return entries.slice(0, ACTIVITY_LIMIT);
+    }
+  }
+  return [];
+}
+
+function saveActivityLog() {
+  const activityFilePath = ensureActivityStorage();
+  fs.writeFileSync(activityFilePath, `${JSON.stringify(activity, null, 2)}\n`, "utf-8");
 }
 
 function readRegisteredUsers() {
@@ -361,55 +528,7 @@ function restoreBoardFromLatestSnapshot() {
   if (!latestSnapshot) {
     return null;
   }
-
-  const snapshotNotes = Array.isArray(latestSnapshot.notes) ? latestSnapshot.notes : [];
-  const snapshotTexts = Array.isArray(latestSnapshot.texts) ? latestSnapshot.texts : [];
-
-  notes.length = 0;
-  boardTexts.length = 0;
-
-  snapshotNotes.forEach((item, index) => {
-    const owner = sanitizeUser(item?.owner || item?.from);
-    const from = sanitizeUser(item?.from || owner);
-    const ownerEmail = sanitizeEmail(item?.ownerEmail);
-    const ownerId = sanitizeEmail(item?.ownerId || ownerEmail) || owner || from;
-
-    notes.push({
-      id: String(item?.id || `${Date.now()}-restored-note-${index}`),
-      text: sanitizeText(item?.text),
-      owner,
-      ownerEmail: ownerEmail || undefined,
-      ownerId,
-      from,
-      to: sanitizeUser(item?.to) || owner || from,
-      priority: ["Nizka", "Stredni", "Vysoka"].includes(item?.priority) ? item.priority : "Stredni",
-      deadline: String(item?.deadline || "").slice(0, 10),
-      done: Boolean(item?.done),
-      color: sanitizeColor(item?.color) || "#ffe66e",
-      x: Number.isFinite(item?.position?.x) ? item.position.x : 140,
-      y: Number.isFinite(item?.position?.y) ? item.position.y : 120,
-      returnX: Number.isFinite(item?.returnX) ? item.returnX : null,
-      returnY: Number.isFinite(item?.returnY) ? item.returnY : null
-    });
-  });
-
-  snapshotTexts.forEach((item, index) => {
-    boardTexts.push({
-      id: String(item?.id || `${Date.now()}-restored-text-${index}`),
-      text: sanitizeText(item?.text),
-      author: sanitizeUser(item?.author || item?.owner),
-      owner: sanitizeUser(item?.owner || item?.author),
-      x: Number.isFinite(item?.position?.x) ? item.position.x : 180,
-      y: Number.isFinite(item?.position?.y) ? item.position.y : 120
-    });
-  });
-
-  return {
-    id: latestSnapshot.id,
-    createdAt: latestSnapshot.createdAt,
-    noteCount: notes.length,
-    textCount: boardTexts.length
-  };
+  return restoreBoardFromSnapshot(latestSnapshot);
 }
 
 app.use(express.json());
@@ -939,6 +1058,34 @@ io.on("connection", (socket) => {
     addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
   });
 
+  socket.on("snapshot:restore", ({ id }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+
+    const snapshot = findSnapshotById(id);
+    if (!snapshot) {
+      ack?.({ ok: false, message: "Vybraný snapshot se nepodařilo najít." });
+      return;
+    }
+
+    const restored = restoreBoardFromSnapshot(snapshot);
+    if (!restored) {
+      ack?.({ ok: false, message: "Snapshot se nepodařilo obnovit." });
+      return;
+    }
+
+    io.emit("board:init", {
+      notes,
+      texts: boardTexts,
+      activity
+    });
+    addActivity(`${user.name} obnovil/a snapshot z ${snapshot.createdAt || "neznámého data"} (${restored.noteCount} lístků, ${restored.textCount} textů)`);
+    ack?.({ ok: true, ...restored });
+  });
+
   socket.on("disconnect", () => {
     const user = usersBySocket.get(socket.id);
     if (user) {
@@ -1016,6 +1163,16 @@ app.post("/api/users/template-entry", (req, res) => {
 app.get("/api/snapshots/latest", (_req, res) => {
   res.json({ latest: readLatestSnapshot() });
 });
+
+app.get("/api/snapshots", (_req, res) => {
+  res.json({ snapshots: listSnapshotSummaries() });
+});
+
+const restoredActivity = readLatestActivityEntries();
+if (restoredActivity.length > 0) {
+  activity.push(...restoredActivity);
+  console.log(`Obnoven živý feed (${restoredActivity.length} položek).`);
+}
 
 const restoredSnapshot = restoreBoardFromLatestSnapshot();
 if (restoredSnapshot) {
