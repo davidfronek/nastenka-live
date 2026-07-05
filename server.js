@@ -1184,5 +1184,5 @@ if (restoredSnapshot) {
 
 const PORT = process.env.PORT || 3099;
 server.listen(PORT, () => {
-  console.log(`Nástěnka Live běží na http://localhost:${PORT}`);
+  console.log(`Nástěnka Live běží na portu ${PORT}`);
 });
