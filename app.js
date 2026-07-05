@@ -660,6 +660,11 @@ function logoutLocally() {
   clearStoredSessionToken();
 }
 
+function showLoginScreen() {
+  appShell.classList.add("hidden");
+  loginScreen.classList.remove("hidden");
+}
+
 function applyAuthLandingMessage() {
   const params = new URLSearchParams(window.location.search);
   const registered = params.get("registered") === "1";
@@ -2566,6 +2571,7 @@ socket.on("auth:error", (message) => {
 socket.on("auth:required", () => {
   if (!me) {
     clearStoredSessionToken();
+    showLoginScreen();
   }
 });
 
@@ -2589,6 +2595,7 @@ socket.on("connect", () => {
 
   const sessionToken = getStoredSessionToken();
   if (!sessionToken) {
+    showLoginScreen();
     return;
   }
 
@@ -2841,3 +2848,6 @@ applyGridSize();
 applyNoteScale();
 applySnapState();
 applyAuthLandingMessage();
+if (!getStoredSessionToken()) {
+  showLoginScreen();
+}
