@@ -79,6 +79,7 @@ const loginForm = document.querySelector("#login-form");
 const loginEmailWrap = document.querySelector("#login-email-wrap");
 const loginEmail = document.querySelector("#login-email");
 const loginPassword = document.querySelector("#login-password");
+const guestLoginBtn = document.querySelector("#guest-login-btn");
 const loginError = document.querySelector("#login-error");
 const appShell = document.querySelector("#app-shell");
 const meBadge = document.querySelector("#me-badge");
@@ -1810,6 +1811,12 @@ loginForm.addEventListener("submit", (event) => {
     email,
     password
   });
+});
+
+guestLoginBtn?.addEventListener("click", () => {
+  loginError.textContent = "";
+  loginError.classList.remove("is-success");
+  socket.emit("auth:guest");
 });
 
 noteForm.addEventListener("submit", (event) => {

@@ -35,6 +35,7 @@ const DONE_OVAL_RING_STEP_Y = 130;
 const DONE_ACTIVE_GAP_PX = 500;
 const NOTE_WIDTH = 206;
 const SELF_REGISTRATION_ENABLED = false;
+const GUEST_LOGIN_ENABLED = true;
 const SESSION_TOKEN_BYTES = 24;
 
 function nowTime() {
@@ -658,6 +659,33 @@ io.on("connection", (socket) => {
 
     emitUsers();
     addActivity(`${user.name} se připojil/a do nástěnky (online: ${usersBySocket.size})`);
+  });
+
+  socket.on("auth:guest", () => {
+    if (!GUEST_LOGIN_ENABLED) {
+      socket.emit("auth:error", "Přihlášení v režimu hosta je vypnuté.");
+      return;
+    }
+
+    const guestCode = crypto.randomBytes(2).toString("hex").toUpperCase();
+    const baseUser = {
+      name: `Host ${guestCode}`,
+      email: `guest-${Date.now()}-${guestCode.toLowerCase()}@guest.local`,
+      role: "user",
+      color: "#ffb703"
+    };
+
+    const sessionToken = createSessionForUser(baseUser);
+    const user = bindSessionToSocket(socket, sessionToken);
+    if (!user) {
+      socket.emit("auth:error", "Přihlášení hosta se nepodařilo. Zkus to znovu.");
+      return;
+    }
+
+    socket.emit("auth:ok", user);
+
+    emitUsers();
+    addActivity(`${user.name} vstoupil/a do nástěnky jako host (online: ${usersBySocket.size})`);
   });
 
   socket.on("auth:resume", ({ sessionToken }) => {

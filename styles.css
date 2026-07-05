@@ -98,6 +98,16 @@ body {
   color: #1f7a35;
 }
 
+.guest-login-button {
+  border: 1px solid var(--outline);
+  background: #ffffff;
+  color: #111827;
+}
+
+.guest-login-button:hover {
+  background: #fff8df;
+}
+
 .app-shell {
   display: grid;
   grid-template-rows: auto 1fr;
