@@ -1182,11 +1182,12 @@ if (restoredSnapshot) {
   );
 }
 
-// 2. DOPLNĚNO: Servírování vašeho React frontendu (index.html) z hlavní složky
-app.use(express.static(__dirname));
+// 1. Správné servírování statických souborů z kořene projektu
+app.use(express.static(path.resolve(__dirname)));
 
+// 2. OPRAVENO: Použití path.resolve pro přesné zacílení na index.html
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(path.resolve(__dirname, "index.html"));
 });
 
 // 3. OPRAVENO: Správné spuštění serveru pro Render (vytáhnuto ven z podmínky)
