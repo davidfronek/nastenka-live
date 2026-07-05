@@ -1168,6 +1168,7 @@ app.get("/api/snapshots", (_req, res) => {
   res.json({ snapshots: listSnapshotSummaries() });
 });
 
+// 1. Načtení historie a snapshotů při startu serveru
 const restoredActivity = readLatestActivityEntries();
 if (restoredActivity.length > 0) {
   activity.push(...restoredActivity);
@@ -1179,9 +1180,16 @@ if (restoredSnapshot) {
   console.log(
     `Obnoven snapshot ${restoredSnapshot.id} (${restoredSnapshot.noteCount} listku, ${restoredSnapshot.textCount} textu) z ${restoredSnapshot.createdAt}.`
   );
-  module.exports = app;
 }
 
+// 2. DOPLNĚNO: Servírování vašeho React frontendu (index.html) z hlavní složky
+app.use(express.static(__dirname));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// 3. OPRAVENO: Správné spuštění serveru pro Render (vytáhnuto ven z podmínky)
 const PORT = process.env.PORT || 3099;
 server.listen(PORT, () => {
   console.log(`Nástěnka Live běží na portu ${PORT}`);
