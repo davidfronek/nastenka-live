@@ -105,6 +105,15 @@ function sanitizeColor(value) {
   return null;
 }
 
+function sanitizeNoteFormat(value) {
+  return {
+    bold: Boolean(value?.bold),
+    italic: Boolean(value?.italic),
+    size: ["small", "normal", "large"].includes(value?.size) ? value.size : "normal",
+    align: ["left", "center", "right"].includes(value?.align) ? value.align : "left"
+  };
+}
+
 function textSnippet(value, maxLength = 48) {
   const clean = String(value || "").replace(/\s+/g, " ").trim();
   if (!clean) {
@@ -408,6 +417,7 @@ function restoreBoardFromSnapshot(snapshot) {
       deadline: String(item?.deadline || "").slice(0, 10),
       done: Boolean(item?.done),
       color: sanitizeColor(item?.color) || "#ffe66e",
+      format: sanitizeNoteFormat(item?.format),
       x: Number.isFinite(item?.position?.x) ? item.position.x : 140,
       y: Number.isFinite(item?.position?.y) ? item.position.y : 120,
       returnX: Number.isFinite(item?.returnX) ? item.returnX : null,
@@ -497,6 +507,7 @@ function saveBoardSnapshot(savedBy) {
       deadline: note.deadline,
       done: note.done,
       color: note.color,
+      format: sanitizeNoteFormat(note.format),
       returnX: Number.isFinite(note.returnX) ? note.returnX : null,
       returnY: Number.isFinite(note.returnY) ? note.returnY : null,
       position: {
@@ -734,6 +745,7 @@ io.on("connection", (socket) => {
         : "Stredni",
       deadline: String(payload?.deadline || "").slice(0, 10),
       color: sanitizeColor(payload?.color) || "#ffe66e",
+      format: sanitizeNoteFormat(payload?.format),
       x: Number.isFinite(payload?.x) ? payload.x : 140,
       y: Number.isFinite(payload?.y) ? payload.y : 120,
       returnX: null,
@@ -907,6 +919,7 @@ io.on("connection", (socket) => {
       : note.priority;
     note.deadline = String(payload?.deadline || "").slice(0, 10);
     note.color = sanitizeColor(payload?.color) || note.color;
+    note.format = sanitizeNoteFormat(payload?.format);
 
     io.emit("note:updated", note);
     addActivity(

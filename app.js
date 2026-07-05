@@ -91,6 +91,7 @@ const noteTemplate = document.querySelector("#note-template");
 const noteForm = document.querySelector("#note-form");
 const noteText = document.querySelector("#note-text");
 const pasteNoteTextBtn = document.querySelector("#paste-note-text");
+const noteFormatToolbar = document.querySelector('[data-format-toolbar="note"]');
 const fromUser = document.querySelector("#from-user");
 const toUser = document.querySelector("#to-user");
 const priority = document.querySelector("#priority");
@@ -125,6 +126,7 @@ const notePreviewEditTo = document.querySelector("#note-preview-edit-to");
 const notePreviewEditPriority = document.querySelector("#note-preview-edit-priority");
 const notePreviewEditDeadline = document.querySelector("#note-preview-edit-deadline");
 const notePreviewEditColorPalette = document.querySelector("#note-preview-edit-color-palette");
+const notePreviewEditFormatToolbar = document.querySelector('[data-format-toolbar="preview-edit"]');
 const notePreviewCancelBtn = document.querySelector("#note-preview-cancel-btn");
 const notePreviewEditStatus = document.querySelector("#note-preview-edit-status");
 const toolDock = document.querySelector(".tool-dock");
@@ -148,6 +150,7 @@ const boardInlineToUser = document.querySelector("#board-inline-to-user");
 const boardInlinePriority = document.querySelector("#board-inline-priority");
 const boardInlineDeadline = document.querySelector("#board-inline-deadline");
 const boardInlinePalette = document.querySelector("#board-inline-palette");
+const boardInlineFormatToolbar = document.querySelector('[data-format-toolbar="board-inline-note"]');
 const boardInlineSubmit = document.querySelector("#board-inline-submit");
 const boardInlineCancel = document.querySelector("#board-inline-cancel");
 const boardQuickCreate = document.querySelector("#board-quick-create");
@@ -174,6 +177,75 @@ const BOARD_TEXT_TITLE = "Čistý text";
 const BOARD_TEXT_CONTROL_TITLE = "Obsah textu";
 const BOARD_TEXT_PLACEHOLDER = "Napiš čistý text na plochu";
 const AUTH_SESSION_STORAGE_KEY = "nastenka.live.sessionToken";
+const NOTE_FORMAT_SIZE_CLASSES = ["note-text-size-small", "note-text-size-normal", "note-text-size-large"];
+const NOTE_FORMAT_SIZES = ["small", "normal", "large"];
+const NOTE_FORMAT_ALIGNS = ["left", "center", "right"];
+
+function normalizeNoteFormat(value) {
+  return {
+    bold: Boolean(value?.bold),
+    italic: Boolean(value?.italic),
+    size: NOTE_FORMAT_SIZES.includes(value?.size) ? value.size : "normal",
+    align: NOTE_FORMAT_ALIGNS.includes(value?.align) ? value.align : "left"
+  };
+}
+
+function getNoteFormatFromToolbar(toolbar) {
+  if (!toolbar) {
+    return normalizeNoteFormat();
+  }
+
+  return normalizeNoteFormat({
+    bold: toolbar.querySelector('[data-format-action="bold"]')?.getAttribute("aria-pressed") === "true",
+    italic: toolbar.querySelector('[data-format-action="italic"]')?.getAttribute("aria-pressed") === "true",
+    size: toolbar.querySelector('[data-format-field="size"]')?.value,
+    align: toolbar.querySelector('[data-format-field="align"]')?.value
+  });
+}
+
+function setNoteFormatToolbar(toolbar, format) {
+  if (!toolbar) {
+    return;
+  }
+
+  const nextFormat = normalizeNoteFormat(format);
+  const boldButton = toolbar.querySelector('[data-format-action="bold"]');
+  const italicButton = toolbar.querySelector('[data-format-action="italic"]');
+  const sizeSelect = toolbar.querySelector('[data-format-field="size"]');
+  const alignSelect = toolbar.querySelector('[data-format-field="align"]');
+
+  [
+    [boldButton, nextFormat.bold],
+    [italicButton, nextFormat.italic]
+  ].forEach(([button, isPressed]) => {
+    button?.setAttribute("aria-pressed", isPressed ? "true" : "false");
+    button?.classList.toggle("active", isPressed);
+  });
+
+  if (sizeSelect) {
+    sizeSelect.value = nextFormat.size;
+  }
+  if (alignSelect) {
+    alignSelect.value = nextFormat.align;
+  }
+}
+
+function resetNoteFormatToolbar(toolbar) {
+  setNoteFormatToolbar(toolbar, normalizeNoteFormat());
+}
+
+function applyNoteFormatToElement(element, format) {
+  if (!element) {
+    return;
+  }
+
+  const nextFormat = normalizeNoteFormat(format);
+  element.classList.remove(...NOTE_FORMAT_SIZE_CLASSES);
+  element.classList.add(`note-text-size-${nextFormat.size}`);
+  element.style.fontWeight = nextFormat.bold ? "700" : "";
+  element.style.fontStyle = nextFormat.italic ? "italic" : "";
+  element.style.textAlign = nextFormat.align;
+}
 
 function getStoredSessionToken() {
   try {
@@ -316,6 +388,7 @@ function openNotePreview(note) {
   clearPendingPreviewUpdateTimer();
 
   notePreviewText.textContent = note.text;
+  applyNoteFormatToElement(notePreviewText, note.format);
   notePreviewDelegation.textContent = `Delegace: ${note.from} -> ${note.to}`;
   notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Hotovo" : " | Stav: Aktivní"}`;
   notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note));
@@ -457,6 +530,7 @@ function refreshOpenPreview() {
   }
 
   notePreviewText.textContent = note.text;
+  applyNoteFormatToElement(notePreviewText, note.format);
   notePreviewDelegation.textContent = `Delegace: ${note.from} -> ${note.to}`;
   notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Hotovo" : " | Stav: Aktivní"}`;
   notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note));
@@ -470,6 +544,7 @@ function refreshOpenPreview() {
       : "Stredni";
     notePreviewEditDeadline.value = note.deadline || "";
     previewEditSelectedColor = note.color || noteColors[0];
+    setNoteFormatToolbar(notePreviewEditFormatToolbar, note.format);
     renderPreviewEditPalette();
   }
 }
@@ -489,6 +564,7 @@ function enterPreviewEditMode() {
     : "Stredni";
   notePreviewEditDeadline.value = note.deadline || "";
   previewEditSelectedColor = note.color || noteColors[0];
+  setNoteFormatToolbar(notePreviewEditFormatToolbar, note.format);
   renderPreviewEditPalette();
   setPreviewEditStatus("");
   notePreviewView?.classList.add("hidden");
@@ -1156,6 +1232,7 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
     boardInlineDeadline.value = deadline.value || "";
   }
   boardInlineSelectedColor = selectedNoteColor;
+  resetNoteFormatToolbar(boardInlineFormatToolbar);
   renderBoardInlinePalette();
   if (boardInlineSubmit) {
     boardInlineSubmit.textContent = boardInlineCreateMode === "note" ? "Přidat lístek" : "Přidat text";
@@ -1171,6 +1248,7 @@ function closeBoardInlineComposer() {
   boardInlineComposer.classList.add("hidden");
   boardInlineComposer.dataset.mode = "";
   boardInlineText.value = "";
+  resetNoteFormatToolbar(boardInlineFormatToolbar);
   if (boardInlineDeadline) {
     boardInlineDeadline.value = "";
   }
@@ -1295,6 +1373,7 @@ function submitBoardInlineComposer() {
       priority: priorityValue,
       deadline: deadlineValue,
       color: boardInlineSelectedColor,
+      format: getNoteFormatFromToolbar(boardInlineFormatToolbar),
       x: snapToGrid(nextX),
       y: snapToGrid(nextY)
     });
@@ -1634,6 +1713,7 @@ function createStickyElement(note) {
   sticky.style.setProperty("--tilt", `${Math.random() * 6 - 3}deg`);
 
   text.textContent = note.text;
+  applyNoteFormatToElement(text, note.format);
   delegation.textContent = `${note.from} -> ${note.to}`;
   details.textContent = `P:${formatPriorityLabel(note.priority)}${note.deadline ? ` | T:${note.deadline}` : ""}`;
   text.title = note.text;
@@ -1837,6 +1917,7 @@ noteForm.addEventListener("submit", (event) => {
     priority: priority.value,
     deadline: deadline.value,
     color: selectedNoteColor,
+    format: getNoteFormatFromToolbar(noteFormatToolbar),
     x: snapToGrid(80 + Math.random() * 460),
     y: snapToGrid(70 + Math.random() * 240)
   });
@@ -1844,6 +1925,7 @@ noteForm.addEventListener("submit", (event) => {
   noteForm.reset();
   fromUser.value = me.name;
   selectedNoteColor = noteColors[0];
+  resetNoteFormatToolbar(noteFormatToolbar);
   renderNotePalette();
   closeDockPanel();
 });
@@ -2002,7 +2084,8 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
       to: notePreviewEditTo.value,
       priority: notePreviewEditPriority.value,
       deadline: notePreviewEditDeadline.value,
-      color: previewEditSelectedColor
+      color: previewEditSelectedColor,
+      format: getNoteFormatFromToolbar(notePreviewEditFormatToolbar)
     },
     (response) => {
       clearPendingPreviewUpdateTimer();
@@ -2199,6 +2282,14 @@ boardInlinePasteNoteTextBtn?.addEventListener("click", () => {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const formatButton = target.closest(".format-btn");
+  if (formatButton instanceof HTMLElement) {
+    const isPressed = formatButton.getAttribute("aria-pressed") === "true";
+    formatButton.setAttribute("aria-pressed", isPressed ? "false" : "true");
+    formatButton.classList.toggle("active", !isPressed);
     return;
   }
 

@@ -109,6 +109,20 @@
                     <div class="emoji-palette" aria-label="Vložit smajlík do lístku"></div>
                     <button id="paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
                   </div>
+                  <div class="text-format-toolbar" data-format-toolbar="note" aria-label="Formátování textu lístku">
+                    <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" aria-pressed="false">B</button>
+                    <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" aria-pressed="false">I</button>
+                    <select class="format-select" data-format-field="size" aria-label="Velikost textu">
+                      <option value="small">Malý</option>
+                      <option value="normal" selected>Normální</option>
+                      <option value="large">Velký</option>
+                    </select>
+                    <select class="format-select" data-format-field="align" aria-label="Zarovnání textu">
+                      <option value="left" selected>Vlevo</option>
+                      <option value="center">Na střed</option>
+                      <option value="right">Vpravo</option>
+                    </select>
+                  </div>
 
                   <div class="inline-fields">
                     <label>
@@ -275,6 +289,20 @@
                   <div class="note-text-actions">
                     <button id="board-inline-paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
                   </div>
+                  <div class="text-format-toolbar" data-format-toolbar="board-inline-note" aria-label="Formátování textu lístku">
+                    <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" aria-pressed="false">B</button>
+                    <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" aria-pressed="false">I</button>
+                    <select class="format-select" data-format-field="size" aria-label="Velikost textu">
+                      <option value="small">Malý</option>
+                      <option value="normal" selected>Normální</option>
+                      <option value="large">Velký</option>
+                    </select>
+                    <select class="format-select" data-format-field="align" aria-label="Zarovnání textu">
+                      <option value="left" selected>Vlevo</option>
+                      <option value="center">Na střed</option>
+                      <option value="right">Vpravo</option>
+                    </select>
+                  </div>
                   <div class="inline-fields">
                     <label>
                       Deleguje
@@ -383,6 +411,20 @@
             <textarea id="note-preview-edit-text" maxlength="300" required></textarea>
           </label>
           <div class="emoji-palette" aria-label="Vložit smajlík do upravovaného lístku"></div>
+          <div class="text-format-toolbar" data-format-toolbar="preview-edit" aria-label="Formátování textu lístku">
+            <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" aria-pressed="false">B</button>
+            <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" aria-pressed="false">I</button>
+            <select class="format-select" data-format-field="size" aria-label="Velikost textu">
+              <option value="small">Malý</option>
+              <option value="normal" selected>Normální</option>
+              <option value="large">Velký</option>
+            </select>
+            <select class="format-select" data-format-field="align" aria-label="Zarovnání textu">
+              <option value="left" selected>Vlevo</option>
+              <option value="center">Na střed</option>
+              <option value="right">Vpravo</option>
+            </select>
+          </div>
 
           <div class="inline-fields">
             <label>
