@@ -40,8 +40,14 @@ let pendingDeleteAll = false;
 let pendingDeleteAllTimer = null;
 let draggedBoardText = null;
 let draggedBoardTextElement = null;
+let activeBoardTextId = null;
+let resizingBoardText = null;
+let resizingBoardTextElement = null;
+let activeTextResizePointerId = null;
+let textResizeStart = { x: 0, y: 0, size: 1.8 };
 let activeTextPointerId = null;
 let lastTextMoveEmitAt = 0;
+let lastTextResizeEmitAt = 0;
 let textDragOffset = { x: 0, y: 0 };
 let selectionPointerId = null;
 let selectionStart = null;
@@ -180,6 +186,14 @@ const AUTH_SESSION_STORAGE_KEY = "nastenka.live.sessionToken";
 const NOTE_FORMAT_SIZE_CLASSES = ["note-text-size-small", "note-text-size-normal", "note-text-size-large"];
 const NOTE_FORMAT_SIZES = ["small", "normal", "large"];
 const NOTE_FORMAT_ALIGNS = ["left", "center", "right"];
+const BOARD_TEXT_MIN_SIZE = 0.25;
+const BOARD_TEXT_DEFAULT_SIZE = 1.8;
+const BOARD_TEXT_MAX_SIZE = 12;
+const BOARD_TEXT_SIZE_PRESETS = {
+  small: 1.25,
+  normal: BOARD_TEXT_DEFAULT_SIZE,
+  large: 2.65
+};
 
 function normalizeNoteFormat(value) {
   return {
@@ -245,6 +259,27 @@ function applyNoteFormatToElement(element, format) {
   element.style.fontWeight = nextFormat.bold ? "700" : "";
   element.style.fontStyle = nextFormat.italic ? "italic" : "";
   element.style.textAlign = nextFormat.align;
+}
+
+function normalizeBoardTextSize(value) {
+  if (Object.hasOwn(BOARD_TEXT_SIZE_PRESETS, value)) {
+    return BOARD_TEXT_SIZE_PRESETS[value];
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return BOARD_TEXT_DEFAULT_SIZE;
+  }
+
+  return Math.round(clamp(numericValue, BOARD_TEXT_MIN_SIZE, BOARD_TEXT_MAX_SIZE) * 100) / 100;
+}
+
+function applyBoardTextSizeToElement(element, size) {
+  if (!element) {
+    return;
+  }
+
+  element.style.fontSize = `${normalizeBoardTextSize(size)}rem`;
 }
 
 function getStoredSessionToken() {
@@ -390,7 +425,7 @@ function openNotePreview(note) {
   notePreviewText.textContent = note.text;
   applyNoteFormatToElement(notePreviewText, note.format);
   notePreviewDelegation.textContent = `Delegace: ${note.from} -> ${note.to}`;
-  notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Hotovo" : " | Stav: Aktivní"}`;
+  notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Vyřešeno" : " | Stav: Aktivní"}`;
   notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note));
   notePreviewView?.classList.remove("hidden");
   notePreviewEditForm?.classList.add("hidden");
@@ -532,7 +567,7 @@ function refreshOpenPreview() {
   notePreviewText.textContent = note.text;
   applyNoteFormatToElement(notePreviewText, note.format);
   notePreviewDelegation.textContent = `Delegace: ${note.from} -> ${note.to}`;
-  notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Hotovo" : " | Stav: Aktivní"}`;
+  notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Vyřešeno" : " | Stav: Aktivní"}`;
   notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note));
 
   if (isPreviewEditing) {
@@ -644,6 +679,10 @@ function logoutLocally() {
   activePointerId = null;
   draggedBoardText = null;
   draggedBoardTextElement = null;
+  activeBoardTextId = null;
+  resizingBoardText = null;
+  resizingBoardTextElement = null;
+  activeTextResizePointerId = null;
   activeTextPointerId = null;
 
   meBadge.textContent = "";
@@ -932,8 +971,16 @@ function isMyNote(note) {
   return (note.ownerId || note.ownerEmail || note.owner || note.from) === (me.email || me.name);
 }
 
+function isAssignedToMe(note) {
+  if (!me) {
+    return false;
+  }
+
+  return String(note?.to || "").trim().toLowerCase() === String(me.name || "").trim().toLowerCase();
+}
+
 function canEditNote(note) {
-  return isMyNote(note);
+  return isMyNote(note) || isAssignedToMe(note);
 }
 
 function canToggleNote(note) {
@@ -949,7 +996,7 @@ function canToggleNote(note) {
     return true;
   }
 
-  return String(note.to || "").trim().toLowerCase() === String(me.name || "").trim().toLowerCase();
+  return isAssignedToMe(note);
 }
 
 function canMoveNote(_note) {
@@ -1024,7 +1071,7 @@ function markSelectedNotesDone() {
 
   socket.emit("note:markManyDone", { ids }, (response) => {
     if (!response?.ok) {
-      setBoardActionStatus(response?.message || "Hromadné označení jako hotové se nepodařilo.", true);
+      setBoardActionStatus(response?.message || "Hromadné označení jako vyřešené se nepodařilo.", true);
       return;
     }
 
@@ -1034,12 +1081,12 @@ function markSelectedNotesDone() {
 
     if (updatedCount === 0) {
       if (deniedCount > 0) {
-        setBoardActionStatus("Vybrané lístky nemůžeš označit jako hotové.", true);
+        setBoardActionStatus("Vybrané lístky nemůžeš označit jako vyřešené.", true);
         return;
       }
 
       if (alreadyDoneCount > 0) {
-        setBoardActionStatus("Vybrané lístky už jsou hotové.");
+        setBoardActionStatus("Vybrané lístky už jsou vyřešené.");
         return;
       }
 
@@ -1049,7 +1096,7 @@ function markSelectedNotesDone() {
 
     const details = [];
     if (alreadyDoneCount > 0) {
-      details.push(`už hotové: ${alreadyDoneCount}`);
+      details.push(`už vyřešené: ${alreadyDoneCount}`);
     }
     if (deniedCount > 0) {
       details.push(`bez oprávnění: ${deniedCount}`);
@@ -1057,8 +1104,8 @@ function markSelectedNotesDone() {
 
     setBoardActionStatus(
       details.length > 0
-        ? `Označeno jako hotové: ${updatedCount} (${details.join(", ")}).`
-        : `Označeno jako hotové: ${updatedCount}.`
+        ? `Označeno jako vyřešené: ${updatedCount} (${details.join(", ")}).`
+        : `Označeno jako vyřešené: ${updatedCount}.`
     );
   });
 }
@@ -1071,6 +1118,138 @@ function isMyBoardText(item) {
     return true;
   }
   return (item.ownerId || item.ownerEmail || item.owner || item.author) === (me.email || me.name);
+}
+
+function canEditBoardText(item) {
+  return isMyBoardText(item);
+}
+
+function setActiveBoardText(id) {
+  activeBoardTextId = id || null;
+  boardCanvas.querySelectorAll(".board-text-node.selected").forEach((element) => {
+    element.classList.toggle("selected", element.dataset.id === activeBoardTextId);
+  });
+}
+
+function clearActiveBoardText() {
+  setActiveBoardText(null);
+}
+
+function editBoardText(item, element) {
+  if (!canEditBoardText(item)) {
+    setBoardActionStatus("Tento text může upravit jen jeho autor nebo admin.", true);
+    return;
+  }
+
+  if (!element) {
+    return;
+  }
+
+  const existingEditor = element.querySelector(".board-text-editor");
+  if (existingEditor) {
+    existingEditor.querySelector("textarea")?.focus();
+    return;
+  }
+
+  const textBody = element.querySelector(".board-text-body");
+  const editor = document.createElement("form");
+  editor.className = "board-text-editor";
+
+  const textarea = document.createElement("textarea");
+  textarea.value = item.text || "";
+  textarea.maxLength = 300;
+  textarea.required = true;
+
+  const actions = document.createElement("div");
+  actions.className = "board-text-editor-actions";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Uložit";
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "danger-btn";
+  deleteBtn.textContent = "Smazat";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "secondary-btn";
+  cancelBtn.textContent = "Zrušit";
+
+  actions.append(saveBtn, deleteBtn, cancelBtn);
+  editor.append(textarea, actions);
+  textBody?.classList.add("hidden");
+  element.append(editor);
+
+  const closeEditor = () => {
+    editor.remove();
+    textBody?.classList.remove("hidden");
+  };
+
+  editor.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = textarea.value.trim();
+    if (!text) {
+      setBoardActionStatus("Text nemůže být prázdný.", true);
+      return;
+    }
+
+    socket.emit("text:update", { id: item.id, text, size: normalizeBoardTextSize(item.size) }, (response) => {
+      if (!response?.ok) {
+        setBoardActionStatus(response?.message || "Úprava textu se nepodařila.", true);
+        return;
+      }
+
+      setBoardActionStatus("Text byl upraven.");
+      closeEditor();
+    });
+  });
+
+  deleteBtn.addEventListener("click", () => {
+    const ok = window.confirm("Opravdu smazat tento text z plochy?");
+    if (!ok) {
+      return;
+    }
+
+    socket.emit("text:delete", { id: item.id }, (response) => {
+      if (!response?.ok && response?.message) {
+        setBoardActionStatus(response.message, true);
+      }
+    });
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    closeEditor();
+  });
+
+  textarea.focus();
+  textarea.select();
+}
+
+function emitBoardTextResize(item, size, ack) {
+  socket.emit("text:resize", { id: item.id, size }, ack);
+}
+
+function startBoardTextResize(item, element, event) {
+  if (!canEditBoardText(item)) {
+    setBoardActionStatus("Velikost tohoto textu může změnit jen jeho autor nebo admin.", true);
+    return;
+  }
+
+  resizingBoardText = item;
+  resizingBoardTextElement = element;
+  activeTextResizePointerId = event.pointerId;
+  textResizeStart = {
+    x: event.clientX,
+    y: event.clientY,
+    size: normalizeBoardTextSize(item.size)
+  };
+  lastTextResizeEmitAt = 0;
+  element.classList.add("resizing");
+  element.setPointerCapture(event.pointerId);
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 async function pasteTextToTextarea(targetTextarea, successMessage) {
@@ -1319,11 +1498,11 @@ function updateDonePositionHints() {
   }
 
   if (hints.length === 0) {
-    donePositionText.textContent = "Hotové lístky jsou právě v aktuálním pohledu. Klikni pro přesun.";
+    donePositionText.textContent = "Vyřešené lístky jsou právě v aktuálním pohledu. Klikni pro přesun.";
     return;
   }
 
-  donePositionText.textContent = `Hotové lístky jsou mimo aktuální výřez: ${hints.join(", ")}. Klikni pro přesun.`;
+  donePositionText.textContent = `Vyřešené lístky jsou mimo aktuální výřez: ${hints.join(", ")}. Klikni pro přesun.`;
 }
 
 function navigateToDoneNotes() {
@@ -1410,6 +1589,8 @@ function submitBoardInlineComposer() {
 function createBoardTextElement(item) {
   const textEl = document.createElement("div");
   textEl.className = "board-text-node";
+  applyBoardTextSizeToElement(textEl, item.size);
+  textEl.classList.toggle("selected", activeBoardTextId === item.id);
   textEl.dataset.id = item.id;
   textEl.style.left = `${item.x}px`;
   textEl.style.top = `${item.y}px`;
@@ -1419,38 +1600,37 @@ function createBoardTextElement(item) {
   textBody.className = "board-text-body";
   textBody.textContent = item.text;
 
-  const deleteBtn = document.createElement("button");
-  deleteBtn.type = "button";
-  deleteBtn.className = "board-text-delete";
-  deleteBtn.textContent = "x";
-  deleteBtn.setAttribute("aria-label", "Smazat text");
-  deleteBtn.title = "Smazat text";
+  const resizeHandle = document.createElement("button");
+  resizeHandle.type = "button";
+  resizeHandle.className = "board-text-resize";
+  resizeHandle.setAttribute("aria-label", "Změnit velikost tažením");
+  resizeHandle.title = "Změnit velikost tažením";
 
-  const canDelete = isMyBoardText(item);
-  if (!canDelete) {
-    deleteBtn.classList.add("hidden");
+  const canEdit = canEditBoardText(item);
+  if (!canEdit) {
+    resizeHandle.classList.add("hidden");
   }
 
-  deleteBtn.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    setActiveBoardText(item.id);
+    startBoardTextResize(item, textEl, event);
+  });
 
-    const ok = window.confirm("Opravdu smazat tento text z plochy?");
-    if (!ok) {
+  textEl.append(textBody, resizeHandle);
+
+  textEl.addEventListener("dblclick", (event) => {
+    if (event.target instanceof HTMLElement && event.target.closest("button")) {
       return;
     }
 
-    socket.emit("text:delete", { id: item.id }, (response) => {
-      if (!response?.ok && response?.message) {
-        setBoardActionStatus(response.message, true);
-      }
-    });
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveBoardText(item.id);
+    editBoardText(item, textEl);
   });
 
-  textEl.append(textBody, deleteBtn);
-
   textEl.addEventListener("pointerdown", (event) => {
-    if (event.target instanceof HTMLElement && event.target.closest(".board-text-delete")) {
+    if (event.target instanceof HTMLElement && event.target.closest("button, textarea, .board-text-editor")) {
       return;
     }
 
@@ -1458,6 +1638,7 @@ function createBoardTextElement(item) {
       return;
     }
 
+    setActiveBoardText(item.id);
     draggedBoardText = item;
     draggedBoardTextElement = textEl;
     activeTextPointerId = event.pointerId;
@@ -1468,6 +1649,7 @@ function createBoardTextElement(item) {
 
     textEl.style.zIndex = "18";
     textEl.setPointerCapture(event.pointerId);
+    event.preventDefault();
   });
 
   return textEl;
@@ -1724,11 +1906,11 @@ function createStickyElement(note) {
   text.title = note.text;
   delegation.title = `Delegace: ${note.from} -> ${note.to}`;
   details.title = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}`;
-  doneToggle.textContent = note.done ? "Obnovit" : "Hotovo";
+  doneToggle.textContent = note.done ? "Obnovit" : "Vyřešeno";
   sticky.classList.toggle("done", note.done);
   sticky.classList.toggle("selected", selectedNoteIds.has(note.id));
 
-  const canDelete = isMyNote(note);
+  const canDelete = canEditNote(note);
   if (!canDelete) {
     deleteToggle.classList.add("hidden");
   }
@@ -1980,6 +2162,8 @@ boardCanvas?.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  clearActiveBoardText();
+
   const boardRect = board.getBoundingClientRect();
   selectionPointerId = event.pointerId;
   selectionStart = {
@@ -2117,6 +2301,7 @@ document.addEventListener("keydown", (event) => {
     closeBoardQuickCreate();
     closeBoardInlineComposer();
     clearSelection();
+    clearActiveBoardText();
     return;
   }
 
@@ -2384,6 +2569,24 @@ document.addEventListener("pointermove", (event) => {
     return;
   }
 
+  if (resizingBoardText && resizingBoardTextElement) {
+    if (activeTextResizePointerId !== null && event.pointerId !== activeTextResizePointerId) {
+      return;
+    }
+
+    const dragDelta = event.clientX - textResizeStart.x + event.clientY - textResizeStart.y;
+    const nextSize = normalizeBoardTextSize(textResizeStart.size + dragDelta / 45);
+    resizingBoardText.size = nextSize;
+    applyBoardTextSizeToElement(resizingBoardTextElement, nextSize);
+
+    const now = performance.now();
+    if (now - lastTextResizeEmitAt > 90) {
+      lastTextResizeEmitAt = now;
+      emitBoardTextResize(resizingBoardText, nextSize);
+    }
+    return;
+  }
+
   if (draggedBoardText && draggedBoardTextElement) {
     if (activeTextPointerId !== null && event.pointerId !== activeTextPointerId) {
       return;
@@ -2501,6 +2704,32 @@ document.addEventListener("pointerup", (event) => {
     selectionStart = null;
     selectionCurrent = null;
     clearSelectionVisual();
+    return;
+  }
+
+  if (resizingBoardText && resizingBoardTextElement) {
+    if (activeTextResizePointerId !== null && event.pointerId !== activeTextResizePointerId) {
+      return;
+    }
+
+    const finalSize = normalizeBoardTextSize(resizingBoardText.size);
+    emitBoardTextResize(resizingBoardText, finalSize, (response) => {
+      if (!response?.ok) {
+        setBoardActionStatus(response?.message || "Změna velikosti textu se nepodařila.", true);
+        return;
+      }
+
+      setBoardActionStatus("Velikost textu byla změněna.");
+    });
+    resizingBoardTextElement.classList.remove("resizing");
+
+    if (activeTextResizePointerId !== null && resizingBoardTextElement.hasPointerCapture(activeTextResizePointerId)) {
+      resizingBoardTextElement.releasePointerCapture(activeTextResizePointerId);
+    }
+
+    resizingBoardText = null;
+    resizingBoardTextElement = null;
+    activeTextResizePointerId = null;
     return;
   }
 
@@ -2659,9 +2888,29 @@ socket.on("text:moved", ({ id, x, y }) => {
   }
 });
 
+
+socket.on("text:updated", (item) => {
+  upsertBoardText(item);
+  const element = boardCanvas.querySelector(`.board-text-node[data-id="${item.id}"]`);
+  if (!element) {
+    renderBoard();
+    return;
+  }
+
+  const textBody = element.querySelector(".board-text-body");
+  if (textBody) {
+    textBody.textContent = item.text;
+  }
+  applyBoardTextSizeToElement(element, item.size);
+  element.title = `${item.author || "Uživatel"}: ${item.text}`;
+  renderBoard();
+});
 socket.on("text:deleted", ({ id }) => {
   boardTexts = boardTexts.filter((item) => item.id !== id);
 
+  if (activeBoardTextId === id) {
+    activeBoardTextId = null;
+  }
   if (draggedBoardText && draggedBoardText.id === id) {
     draggedBoardText = null;
     draggedBoardTextElement = null;
@@ -2742,7 +2991,7 @@ socket.on("note:toggled", ({ id, done, x, y, moved }) => {
     element.classList.toggle("done", done);
     const doneButton = element.querySelector(".done-toggle");
     if (doneButton) {
-      doneButton.textContent = done ? "Obnovit" : "Hotovo";
+      doneButton.textContent = done ? "Obnovit" : "Vyřešeno";
     }
 
     element.classList.add("done-moving");

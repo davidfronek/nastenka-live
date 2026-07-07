@@ -114,6 +114,24 @@ function sanitizeNoteFormat(value) {
   };
 }
 
+function sanitizeBoardTextSize(value) {
+  const presets = {
+    small: 1.25,
+    normal: 1.8,
+    large: 2.65
+  };
+  if (Object.hasOwn(presets, value)) {
+    return presets[value];
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return presets.normal;
+  }
+
+  return Math.round(Math.min(Math.max(numericValue, 0.25), 12) * 100) / 100;
+}
+
 function textSnippet(value, maxLength = 48) {
   const clean = String(value || "").replace(/\s+/g, " ").trim();
   if (!clean) {
@@ -153,7 +171,11 @@ function canManageNote(user, note) {
 
   const ownerIdentity = note.ownerId || note.ownerEmail || note.owner || note.from;
   const userIdentity = sanitizeEmail(user.email) || user.name;
-  return ownerIdentity === userIdentity;
+  if (ownerIdentity === userIdentity) {
+    return true;
+  }
+
+  return sanitizeUser(note.to).toLowerCase() === sanitizeUser(user.name).toLowerCase();
 }
 
 function canToggleNote(user, note) {
@@ -166,6 +188,19 @@ function canToggleNote(user, note) {
   }
 
   return sanitizeUser(note.to).toLowerCase() === sanitizeUser(user.name).toLowerCase();
+}
+
+function canManageText(user, textItem) {
+  if (!user || !textItem) {
+    return false;
+  }
+
+  if (isAdmin(user)) {
+    return true;
+  }
+
+  const textOwner = textItem.ownerId || textItem.ownerEmail || textItem.owner || textItem.author;
+  return textOwner === (sanitizeEmail(user.email) || user.name);
 }
 
 function hashPassword(password) {
@@ -431,6 +466,9 @@ function restoreBoardFromSnapshot(snapshot) {
       text: sanitizeText(item?.text),
       author: sanitizeUser(item?.author || item?.owner),
       owner: sanitizeUser(item?.owner || item?.author),
+      ownerEmail: sanitizeEmail(item?.ownerEmail) || undefined,
+      ownerId: sanitizeEmail(item?.ownerId || item?.ownerEmail) || sanitizeUser(item?.owner || item?.author),
+      size: sanitizeBoardTextSize(item?.size),
       x: Number.isFinite(item?.position?.x) ? item.position.x : 180,
       y: Number.isFinite(item?.position?.y) ? item.position.y : 120
     });
@@ -520,6 +558,9 @@ function saveBoardSnapshot(savedBy) {
       text: item.text,
       author: item.author,
       owner: item.owner,
+      ownerEmail: item.ownerEmail || null,
+      ownerId: item.ownerId || null,
+      size: sanitizeBoardTextSize(item.size),
       position: {
         x: item.x,
         y: item.y
@@ -779,6 +820,7 @@ io.on("connection", (socket) => {
       owner: user.name,
       ownerEmail: sanitizeEmail(user.email),
       ownerId: sanitizeEmail(user.email),
+      size: sanitizeBoardTextSize(payload?.size),
       x: Number.isFinite(payload?.x) ? payload.x : 180,
       y: Number.isFinite(payload?.y) ? payload.y : 120
     };
@@ -810,8 +852,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("text:move", ({ id, x, y }) => {
+    const user = usersBySocket.get(socket.id);
     const textItem = boardTexts.find((item) => item.id === id);
-    if (!textItem) {
+    if (!textItem || !user || !canManageText(user, textItem)) {
       return;
     }
 
@@ -819,6 +862,60 @@ io.on("connection", (socket) => {
     textItem.y = Number.isFinite(y) ? y : textItem.y;
 
     socket.broadcast.emit("text:moved", { id: textItem.id, x: textItem.x, y: textItem.y });
+  });
+
+  socket.on("text:update", ({ id, text, size }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+
+    const textItem = boardTexts.find((item) => item.id === String(id || ""));
+    if (!textItem) {
+      ack?.({ ok: false, message: "Text už neexistuje." });
+      return;
+    }
+
+    if (!canManageText(user, textItem)) {
+      ack?.({ ok: false, message: "Tento text může upravit jen jeho autor nebo admin." });
+      return;
+    }
+
+    const nextText = sanitizeText(text);
+    if (!nextText) {
+      ack?.({ ok: false, message: "Text nemůže být prázdný." });
+      return;
+    }
+
+    textItem.text = nextText;
+    textItem.size = sanitizeBoardTextSize(size || textItem.size);
+    io.emit("text:updated", textItem);
+    addActivity(`${user.name} upravil/a text na ploše: "${textSnippet(textItem.text)}"`);
+    ack?.({ ok: true, item: textItem });
+  });
+
+  socket.on("text:resize", ({ id, size }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+
+    const textItem = boardTexts.find((item) => item.id === String(id || ""));
+    if (!textItem) {
+      ack?.({ ok: false, message: "Text už neexistuje." });
+      return;
+    }
+
+    if (!canManageText(user, textItem)) {
+      ack?.({ ok: false, message: "Velikost tohoto textu může změnit jen jeho autor nebo admin." });
+      return;
+    }
+
+    textItem.size = sanitizeBoardTextSize(size);
+    io.emit("text:updated", textItem);
+    ack?.({ ok: true, item: textItem });
   });
 
   socket.on("text:delete", ({ id }, ack) => {
@@ -835,9 +932,7 @@ io.on("connection", (socket) => {
     }
 
     const textItem = boardTexts[textIndex];
-    const textOwner = textItem.ownerId || textItem.ownerEmail || textItem.owner || textItem.author;
-    const canDeleteText = isAdmin(user) || textOwner === (sanitizeEmail(user.email) || user.name);
-    if (!canDeleteText) {
+    if (!canManageText(user, textItem)) {
       ack?.({ ok: false, message: "Tento text může smazat jen jeho autor nebo admin." });
       return;
     }
@@ -881,8 +976,8 @@ io.on("connection", (socket) => {
 
     io.emit("note:toggled", { id: note.id, done: note.done, x: note.x, y: note.y, moved });
     addActivity(
-      `${user.name} nastavil/a stav lístku "${textSnippet(note.text, 36)}" pro ${note.to}: ${note.done ? "Hotovo" : "Aktivní"}${
-        moved ? " | přesun do hotových" : ""
+      `${user.name} nastavil/a stav lístku "${textSnippet(note.text, 36)}" pro ${note.to}: ${note.done ? "Vyřešeno" : "Aktivní"}${
+        moved ? " | přesun do vyřešených" : ""
       }`
     );
     ack?.({ ok: true, id: note.id, done: note.done });
@@ -1046,7 +1141,7 @@ io.on("connection", (socket) => {
     });
 
     if (updatedCount > 0) {
-      addActivity(`${user.name} hromadně označil/a lístky jako hotové (${updatedCount})`);
+      addActivity(`${user.name} hromadně označil/a lístky jako vyřešené (${updatedCount})`);
     }
 
     ack?.({ ok: true, updatedCount, deniedCount, alreadyDoneCount });
