@@ -18,6 +18,7 @@ const usersBySocket = new Map();
 const sessionsByToken = new Map();
 const notes = [];
 const boardTexts = [];
+const textResizeActivityByUser = new Map();
 
 const activity = [];
 const dataDir = path.join(__dirname, "data");
@@ -33,6 +34,7 @@ const DONE_OVAL_POINTS_PER_RING = 14;
 const DONE_OVAL_RING_STEP_X = 170;
 const DONE_OVAL_RING_STEP_Y = 130;
 const DONE_ACTIVE_GAP_PX = 500;
+const TEXT_RESIZE_ACTIVITY_THROTTLE_MS = 1500;
 const NOTE_WIDTH = 206;
 const SELF_REGISTRATION_ENABLED = false;
 const GUEST_LOGIN_ENABLED = true;
@@ -66,6 +68,18 @@ function addActivity(message) {
   }
   saveActivityLog();
   io.emit("activity:list", activity);
+}
+
+function shouldLogTextResizeActivity(user, textItem) {
+  const key = `${user?.id || user?.name || "unknown"}:${textItem?.id || "unknown"}`;
+  const now = Date.now();
+  const lastLoggedAt = textResizeActivityByUser.get(key) || 0;
+  if (now - lastLoggedAt < TEXT_RESIZE_ACTIVITY_THROTTLE_MS) {
+    return false;
+  }
+
+  textResizeActivityByUser.set(key, now);
+  return true;
 }
 
 function sanitizeUser(name) {
@@ -801,7 +815,7 @@ io.on("connection", (socket) => {
     notes.push(note);
     io.emit("note:created", note);
     addActivity(
-      `${note.from} vytvořil/a lístek pro ${note.to}: "${textSnippet(note.text)}" | priorita ${formatPriorityLabel(note.priority)}${
+      `${note.from} vytvořil/a lístek: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
         note.deadline ? ` | termín ${note.deadline}` : ""
       }`
     );
@@ -831,7 +845,7 @@ io.on("connection", (socket) => {
 
     boardTexts.push(textItem);
     io.emit("text:created", textItem);
-    addActivity(`${user.name} přidal/a text na plochu: "${textSnippet(textItem.text)}"`);
+    addActivity(`${user.name} přidal/a text: "${textSnippet(textItem.text)}" na plochu`);
   });
 
   socket.on("note:move", ({ id, x, y }) => {
@@ -891,7 +905,7 @@ io.on("connection", (socket) => {
     textItem.text = nextText;
     textItem.size = sanitizeBoardTextSize(size || textItem.size);
     io.emit("text:updated", textItem);
-    addActivity(`${user.name} upravil/a text na ploše: "${textSnippet(textItem.text)}"`);
+    addActivity(`${user.name} upravil/a text: "${textSnippet(textItem.text)}" na ploše`);
     ack?.({ ok: true, item: textItem });
   });
 
@@ -913,8 +927,15 @@ io.on("connection", (socket) => {
       return;
     }
 
-    textItem.size = sanitizeBoardTextSize(size);
+    const previousSize = sanitizeBoardTextSize(textItem.size);
+    const nextSize = sanitizeBoardTextSize(size);
+    const sizeChanged = nextSize !== previousSize;
+
+    textItem.size = nextSize;
     io.emit("text:updated", textItem);
+    if (sizeChanged && shouldLogTextResizeActivity(user, textItem)) {
+      addActivity(`${user.name} změnil/a velikost textu: "${textSnippet(textItem.text)}" na ploše`);
+    }
     ack?.({ ok: true, item: textItem });
   });
 
@@ -939,7 +960,7 @@ io.on("connection", (socket) => {
 
     const [removedText] = boardTexts.splice(textIndex, 1);
     io.emit("text:deleted", { id: removedText.id });
-    addActivity(`${user.name} smazal/a text z plochy: "${textSnippet(removedText.text)}"`);
+    addActivity(`${user.name} smazal/a text: "${textSnippet(removedText.text)}" z plochy`);
     ack?.({ ok: true, id: removedText.id });
   });
 
@@ -976,7 +997,7 @@ io.on("connection", (socket) => {
 
     io.emit("note:toggled", { id: note.id, done: note.done, x: note.x, y: note.y, moved });
     addActivity(
-      `${user.name} nastavil/a stav lístku "${textSnippet(note.text, 36)}" pro ${note.to}: ${note.done ? "Vyřešeno" : "Aktivní"}${
+      `${user.name} nastavil/a stav lístku: "${textSnippet(note.text, 36)}" pro ${note.to} | ${note.done ? "Vyřešeno" : "Aktivní"}${
         moved ? " | přesun do vyřešených" : ""
       }`
     );
@@ -1018,7 +1039,7 @@ io.on("connection", (socket) => {
 
     io.emit("note:updated", note);
     addActivity(
-      `${user.name} upravil/a lístek pro ${note.to}: "${textSnippet(note.text)}" | priorita ${formatPriorityLabel(note.priority)}${
+      `${user.name} upravil/a lístek: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
         note.deadline ? ` | termín ${note.deadline}` : ""
       }`
     );
@@ -1046,7 +1067,7 @@ io.on("connection", (socket) => {
 
     const [removed] = notes.splice(noteIndex, 1);
     io.emit("note:deleted", { id: removed.id });
-    addActivity(`${user.name} smazal/a lístek pro ${removed.to}: "${textSnippet(removed.text)}"`);
+    addActivity(`${user.name} smazal/a lístek: "${textSnippet(removed.text)}" pro ${removed.to}`);
     ack?.({ ok: true, id: removed.id });
   });
 
