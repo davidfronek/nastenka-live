@@ -70,13 +70,6 @@
                 </svg>
               </span>
             </button>
-            <button id="dock-toggle-board" class="dock-btn" type="button" aria-label="Plocha" data-hint="Plocha">
-              <span class="dock-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                  <path d="M5 5h14v14H5zm2 2v4h4V7zm6 0v4h4V7zM7 13v4h4v-4zm6 0v4h4v-4z"></path>
-                </svg>
-              </span>
-            </button>
             <button id="dock-toggle-actions" class="dock-btn" type="button" aria-label="Akce" data-hint="Akce">
               <span class="dock-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
@@ -103,37 +96,52 @@
                   <p class="control-title">Obsah a delegace</p>
                   <label>
                     Zadání
-                    <textarea id="note-text" required placeholder="Například: Finální kontrola textu a předání klientovi"></textarea>
+                    <div class="rich-editor-shell">
+                      <div class="editor-tools">
+                        <div class="text-format-toolbar" data-format-toolbar="note" aria-label="Formátování textu lístku">
+                          <div class="format-group" aria-label="Styl písma">
+                            <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" title="Tučně"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h6.2a3.8 3.8 0 0 1 1.9 7.1A4 4 0 0 1 13.5 20H7zm3 2v4h3a2 2 0 1 0 0-4zm0 6v5h3.5a2.5 2.5 0 0 0 0-5z"/></svg></button>
+                            <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" title="Kurzíva"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 4h8v2h-3.1l-3.4 12H15v2H7v-2h3.1l3.4-12H10z"/></svg></button>
+                          </div>
+                          <div class="format-group" aria-label="Velikost textu">
+                            <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="small" aria-label="Malý text" title="Malý text">A</button>
+                            <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="normal" aria-label="Normální text" title="Normální text">A</button>
+                            <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="large" aria-label="Velký text" title="Velký text">A</button>
+                          </div>
+                          <div class="format-group" aria-label="Zarovnání textu">
+                            <button class="format-btn" type="button" data-format-field="align" data-format-value="left" aria-label="Zarovnat vlevo" title="Zarovnat vlevo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm0 4h10v2H4zm0 4h16v2H4zm0 4h10v2H4z"/></svg></button>
+                            <button class="format-btn" type="button" data-format-field="align" data-format-value="center" aria-label="Zarovnat na střed" title="Zarovnat na střed"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm3 4h10v2H7zm-3 4h16v2H4zm3 4h10v2H7z"/></svg></button>
+                            <button class="format-btn" type="button" data-format-field="align" data-format-value="right" aria-label="Zarovnat vpravo" title="Zarovnat vpravo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm10 4h6v2h-6zM4 14h16v2H4zm10 4h6v2h-6z"/></svg></button>
+                          </div>
+                        </div>
+                        <div class="editor-aux-actions">
+                          <div class="emoji-picker-wrap">
+                            <button type="button" class="emoji-toggle-btn" aria-label="Vložit smajlík" title="Vložit smajlík" aria-expanded="false">😊</button>
+                            <div class="emoji-palette" role="dialog" aria-label="Výběr smajlíku" hidden></div>
+                          </div>
+                          <button id="paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
+                        </div>
+                      </div>
+                      <div id="note-text" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Například: Finální kontrola textu a předání klientovi"></div>
+                    </div>
                   </label>
-                  <div class="note-text-actions">
-                    <div class="emoji-palette" aria-label="Vložit smajlík do lístku"></div>
-                    <button id="paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
-                  </div>
-                  <div class="text-format-toolbar" data-format-toolbar="note" aria-label="Formátování textu lístku">
-                    <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" aria-pressed="false">B</button>
-                    <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" aria-pressed="false">I</button>
-                    <select class="format-select" data-format-field="size" aria-label="Velikost textu">
-                      <option value="small">Malý</option>
-                      <option value="normal" selected>Normální</option>
-                      <option value="large">Velký</option>
-                    </select>
-                    <select class="format-select" data-format-field="align" aria-label="Zarovnání textu">
-                      <option value="left" selected>Vlevo</option>
-                      <option value="center">Na střed</option>
-                      <option value="right">Vpravo</option>
-                    </select>
-                  </div>
 
                   <div class="inline-fields">
                     <label>
-                      Deleguje
+                      Autor
                       <input id="from-user" type="text" readonly />
                     </label>
-                    <label>
-                      Řešitel
-                      <select id="to-user"></select>
-                    </label>
                   </div>
+
+                  <label class="checkbox-field">
+                    <input id="note-is-delegated" type="checkbox" />
+                    <span>Delegovaný lístek?</span>
+                  </label>
+
+                  <label id="note-to-user-wrap" class="hidden">
+                    Řešitel
+                    <select id="to-user"></select>
+                  </label>
 
                   <div class="inline-fields">
                     <label>
@@ -181,54 +189,6 @@
               </div>
             </div>
 
-            <div id="dock-section-board" class="dock-section hidden">
-              <h2 class="section-icon" aria-label="Nastavení plochy" title="Nastavení plochy">
-                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                  <path d="M4 5h16v14H4zm2 2v10h12V7z"></path>
-                  <path d="M10 7v10h2V7zM6 11v2h12v-2z"></path>
-                </svg>
-              </h2>
-              <div class="dock-section-head dock-theme-board">
-                <h3>Nastavení plochy</h3>
-                <p>Měřítko lístků a přichytávání k mřížce.</p>
-              </div>
-              <div class="filters compact board-settings-menu themed-panel themed-panel-board">
-                <div class="control-card">
-                  <p class="control-title">Měřítko lístků</p>
-                  <div class="zoom-group zoom-group-card">
-                    <span class="zoom-label" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                        <path d="M5 5h14v14H5z"></path>
-                      </svg>
-                    </span>
-                    <button id="note-scale-minus" class="zoom-btn" type="button" aria-label="Zmenšit lístky">
-                      <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                        <path d="M5 11h14v2H5z"></path>
-                      </svg>
-                    </button>
-                    <span id="note-scale-value" class="zoom-value">100%</span>
-                    <button id="note-scale-plus" class="zoom-btn" type="button" aria-label="Zvětšit lístky">
-                      <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                        <path d="M11 5h2v14h-2z"></path>
-                        <path d="M5 11h14v2H5z"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="control-card">
-                  <p class="control-title">Přichytávání k mřížce</p>
-                  <div class="zoom-group snap-group snap-group-card">
-                    <span class="zoom-label" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                        <path d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"></path>
-                      </svg>
-                    </span>
-                    <button id="snap-toggle" class="zoom-btn snap-toggle" type="button" aria-label="Zapnout nebo vypnout přichytávání">ON</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div id="dock-section-actions" class="dock-section hidden">
               <h2 class="section-icon" aria-label="Rychle akce" title="Rychle akce">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
@@ -265,6 +225,15 @@
         </section>
 
         <section class="board-zone">
+          <div class="board-side-tools">
+            <button id="archive-indicator" class="archive-indicator hidden" type="button" aria-label="Otevřít archiv lístků">
+              <span class="archive-indicator-label">Archiv lístků</span>
+              <span id="archive-indicator-total" class="archive-indicator-total">0</span>
+              <span class="archive-indicator-breakdown">
+                <span id="archive-indicator-done" class="archive-indicator-chip archive-indicator-chip-done">Vyřešené 0</span>
+              </span>
+            </button>
+          </div>
           <div id="board" class="board" aria-label="Kolaborativní plocha">
             <div id="board-canvas" class="board-canvas">
               <div id="board-quick-create" class="board-quick-create hidden" role="dialog" aria-label="Rychlé vytvoření na ploše">
@@ -278,41 +247,59 @@
               <form id="board-inline-composer" class="board-inline-composer note-form control-card note-form-card hidden" autocomplete="off">
                 <p id="board-inline-title" class="board-inline-title">Nový lístek</p>
                 <p id="board-inline-control-title" class="control-title">Obsah a delegace</p>
-                <textarea
-                  id="board-inline-text"
-                  maxlength="300"
-                  placeholder="Například: Finální kontrola textu a předání klientovi"
-                  aria-label="Text nového lístku"
-                ></textarea>
-                <div class="emoji-palette" aria-label="Vložit smajlík na plochu"></div>
+                <div class="rich-editor-shell">
+                  <div class="editor-tools">
+                    <div class="text-format-toolbar" data-format-toolbar="board-inline-note" aria-label="Formátování textu lístku">
+                      <div class="format-group" aria-label="Styl písma">
+                        <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" title="Tučně"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h6.2a3.8 3.8 0 0 1 1.9 7.1A4 4 0 0 1 13.5 20H7zm3 2v4h3a2 2 0 1 0 0-4zm0 6v5h3.5a2.5 2.5 0 0 0 0-5z"/></svg></button>
+                        <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" title="Kurzíva"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 4h8v2h-3.1l-3.4 12H15v2H7v-2h3.1l3.4-12H10z"/></svg></button>
+                      </div>
+                      <div class="format-group" aria-label="Velikost textu">
+                        <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="small" aria-label="Malý text" title="Malý text">A</button>
+                        <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="normal" aria-label="Normální text" title="Normální text">A</button>
+                        <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="large" aria-label="Velký text" title="Velký text">A</button>
+                      </div>
+                      <div class="format-group" aria-label="Zarovnání textu">
+                        <button class="format-btn" type="button" data-format-field="align" data-format-value="left" aria-label="Zarovnat vlevo" title="Zarovnat vlevo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm0 4h10v2H4zm0 4h16v2H4zm0 4h10v2H4z"/></svg></button>
+                        <button class="format-btn" type="button" data-format-field="align" data-format-value="center" aria-label="Zarovnat na střed" title="Zarovnat na střed"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm3 4h10v2H7zm-3 4h16v2H4zm3 4h10v2H7z"/></svg></button>
+                        <button class="format-btn" type="button" data-format-field="align" data-format-value="right" aria-label="Zarovnat vpravo" title="Zarovnat vpravo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm10 4h6v2h-6zM4 14h16v2H4zm10 4h6v2h-6z"/></svg></button>
+                      </div>
+                    </div>
+                    <div class="editor-aux-actions">
+                      <div class="emoji-picker-wrap">
+                        <button type="button" class="emoji-toggle-btn" aria-label="Vložit smajlík" title="Vložit smajlík" aria-expanded="false">😊</button>
+                        <div class="emoji-palette" role="dialog" aria-label="Výběr smajlíku" hidden></div>
+                      </div>
+                      <button id="board-inline-paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
+                    </div>
+                  </div>
+                  <div
+                    id="board-inline-text"
+                    class="rich-editor"
+                    contenteditable="true"
+                    role="textbox"
+                    aria-multiline="true"
+                    data-placeholder="Například: Finální kontrola textu a předání klientovi"
+                    aria-label="Text nového lístku"
+                  ></div>
+                </div>
                 <div id="board-inline-note-fields" class="board-inline-note-fields">
-                  <div class="note-text-actions">
-                    <button id="board-inline-paste-note-text" class="secondary-btn compact-btn" type="button">Vložit text</button>
-                  </div>
-                  <div class="text-format-toolbar" data-format-toolbar="board-inline-note" aria-label="Formátování textu lístku">
-                    <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" aria-pressed="false">B</button>
-                    <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" aria-pressed="false">I</button>
-                    <select class="format-select" data-format-field="size" aria-label="Velikost textu">
-                      <option value="small">Malý</option>
-                      <option value="normal" selected>Normální</option>
-                      <option value="large">Velký</option>
-                    </select>
-                    <select class="format-select" data-format-field="align" aria-label="Zarovnání textu">
-                      <option value="left" selected>Vlevo</option>
-                      <option value="center">Na střed</option>
-                      <option value="right">Vpravo</option>
-                    </select>
-                  </div>
                   <div class="inline-fields">
                     <label>
-                      Deleguje
+                      Autor
                       <input id="board-inline-from-user" type="text" readonly />
                     </label>
-                    <label>
-                      Řešitel
-                      <select id="board-inline-to-user"></select>
-                    </label>
                   </div>
+
+                  <label class="checkbox-field">
+                    <input id="board-inline-is-delegated" type="checkbox" />
+                    <span>Delegovaný lístek?</span>
+                  </label>
+
+                  <label id="board-inline-to-user-wrap" class="hidden">
+                    Řešitel
+                    <select id="board-inline-to-user"></select>
+                  </label>
 
                   <div class="inline-fields">
                     <label>
@@ -357,7 +344,6 @@
                   <path d="M12 16l-6.7-6.7 1.4-1.4 5.3 5.3 5.3-5.3 1.4 1.4z"></path>
                 </svg>
               </button>
-              <button id="done-position-text" class="done-position-text hidden" type="button">Vyřešené lístky</button>
               <button id="board-arrow-right" class="board-arrow board-arrow-right hidden" type="button" aria-label="Posunout plochu doprava">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
                   <path d="M9.3 18.7L16 12 9.3 5.3 7.9 6.7l5.3 5.3-5.3 5.3z"></path>
@@ -408,34 +394,51 @@
         <form id="note-preview-edit-form" class="note-preview-edit-form hidden" autocomplete="off">
           <label>
             Zadání
-            <textarea id="note-preview-edit-text" maxlength="300" required></textarea>
+            <div class="rich-editor-shell note-preview-editor-shell">
+              <div class="editor-tools">
+                <div class="text-format-toolbar" data-format-toolbar="preview-edit" aria-label="Formátování textu lístku">
+                  <div class="format-group" aria-label="Styl písma">
+                    <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" title="Tučně"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h6.2a3.8 3.8 0 0 1 1.9 7.1A4 4 0 0 1 13.5 20H7zm3 2v4h3a2 2 0 1 0 0-4zm0 6v5h3.5a2.5 2.5 0 0 0 0-5z"/></svg></button>
+                    <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" title="Kurzíva"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 4h8v2h-3.1l-3.4 12H15v2H7v-2h3.1l3.4-12H10z"/></svg></button>
+                  </div>
+                  <div class="format-group" aria-label="Velikost textu">
+                    <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="small" aria-label="Malý text" title="Malý text">A</button>
+                    <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="normal" aria-label="Normální text" title="Normální text">A</button>
+                    <button class="format-btn format-btn-size" type="button" data-format-field="size" data-format-value="large" aria-label="Velký text" title="Velký text">A</button>
+                  </div>
+                  <div class="format-group" aria-label="Zarovnání textu">
+                    <button class="format-btn" type="button" data-format-field="align" data-format-value="left" aria-label="Zarovnat vlevo" title="Zarovnat vlevo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm0 4h10v2H4zm0 4h16v2H4zm0 4h10v2H4z"/></svg></button>
+                    <button class="format-btn" type="button" data-format-field="align" data-format-value="center" aria-label="Zarovnat na střed" title="Zarovnat na střed"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm3 4h10v2H7zm-3 4h16v2H4zm3 4h10v2H7z"/></svg></button>
+                    <button class="format-btn" type="button" data-format-field="align" data-format-value="right" aria-label="Zarovnat vpravo" title="Zarovnat vpravo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 6h16v2H4zm10 4h6v2h-6zM4 14h16v2H4zm10 4h6v2h-6z"/></svg></button>
+                  </div>
+                </div>
+                <div class="editor-aux-actions">
+                  <div class="emoji-picker-wrap">
+                    <button type="button" class="emoji-toggle-btn" aria-label="Vložit smajlík" title="Vložit smajlík" aria-expanded="false">😊</button>
+                    <div class="emoji-palette" role="dialog" aria-label="Výběr smajlíku" hidden></div>
+                  </div>
+                </div>
+              </div>
+              <div id="note-preview-edit-text" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Zadání lístku"></div>
+            </div>
           </label>
-          <div class="emoji-palette" aria-label="Vložit smajlík do upravovaného lístku"></div>
-          <div class="text-format-toolbar" data-format-toolbar="preview-edit" aria-label="Formátování textu lístku">
-            <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" aria-pressed="false">B</button>
-            <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" aria-pressed="false">I</button>
-            <select class="format-select" data-format-field="size" aria-label="Velikost textu">
-              <option value="small">Malý</option>
-              <option value="normal" selected>Normální</option>
-              <option value="large">Velký</option>
-            </select>
-            <select class="format-select" data-format-field="align" aria-label="Zarovnání textu">
-              <option value="left" selected>Vlevo</option>
-              <option value="center">Na střed</option>
-              <option value="right">Vpravo</option>
-            </select>
-          </div>
 
           <div class="inline-fields">
             <label>
-              Deleguje
+              Autor
               <input id="note-preview-edit-from" type="text" readonly />
             </label>
-            <label>
-              Řešitel
-              <select id="note-preview-edit-to"></select>
-            </label>
           </div>
+
+          <label class="checkbox-field">
+            <input id="note-preview-edit-is-delegated" type="checkbox" />
+            <span>Delegovaný lístek?</span>
+          </label>
+
+          <label id="note-preview-edit-to-wrap" class="hidden">
+            Řešitel
+            <select id="note-preview-edit-to"></select>
+          </label>
 
           <div class="inline-fields">
             <label>
@@ -463,6 +466,45 @@
           </div>
           <p id="note-preview-edit-status" class="session-save-status" aria-live="polite"></p>
         </form>
+      </article>
+    </div>
+
+    <div id="note-archive" class="note-preview hidden" aria-hidden="true">
+      <div class="note-preview-backdrop" data-close-archive="true"></div>
+      <article class="note-preview-sheet note-archive-sheet">
+        <button id="note-archive-close" class="note-preview-close" type="button" aria-label="Zavřít archiv lístků">
+          <svg viewBox="0 0 24 24" role="presentation" focusable="false" aria-hidden="true">
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+          </svg>
+        </button>
+        <div class="note-archive-head">
+          <h2>Archiv lístků</h2>
+          <p id="note-archive-summary" class="note-archive-summary"></p>
+        </div>
+        <div class="note-archive-sections">
+          <section class="note-archive-section">
+            <div class="note-archive-section-head">
+              <h3>Vyřešené</h3>
+              <span id="note-archive-done-count" class="note-archive-count">0</span>
+            </div>
+            <div id="note-archive-done-list" class="note-archive-list"></div>
+          </section>
+        </div>
+      </article>
+    </div>
+
+    <div id="confirm-modal" class="note-preview hidden" aria-hidden="true">
+      <div class="note-preview-backdrop" data-close-confirm="true"></div>
+      <article class="note-preview-sheet confirm-modal-sheet">
+        <div class="confirm-modal-copy">
+          <h2 id="confirm-modal-title">Potvrzení</h2>
+          <p id="confirm-modal-message"></p>
+        </div>
+        <div class="confirm-modal-actions">
+          <button id="confirm-modal-cancel" class="secondary-btn" type="button">Zrušit</button>
+          <button id="confirm-modal-confirm" class="danger-btn" type="button">Potvrdit</button>
+        </div>
       </article>
     </div>
 

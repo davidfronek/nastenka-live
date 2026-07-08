@@ -19,6 +19,7 @@ const sessionsByToken = new Map();
 const notes = [];
 const boardTexts = [];
 const textResizeActivityByUser = new Map();
+const noteResizeActivityByUser = new Map();
 
 const activity = [];
 const dataDir = path.join(__dirname, "data");
@@ -36,6 +37,17 @@ const DONE_OVAL_RING_STEP_Y = 130;
 const DONE_ACTIVE_GAP_PX = 500;
 const TEXT_RESIZE_ACTIVITY_THROTTLE_MS = 1500;
 const NOTE_WIDTH = 206;
+const NOTE_DEFAULT_WIDTH = 188;
+const NOTE_DEFAULT_HEIGHT = 146;
+const NOTE_MIN_WIDTH = 120;
+const NOTE_MIN_HEIGHT = 90;
+const NOTE_MAX_WIDTH = 600;
+const NOTE_MAX_HEIGHT = 480;
+const NOTE_RESIZE_ACTIVITY_THROTTLE_MS = 1500;
+const BOARD_TEXT_WIDTH = 340;
+const BOARD_TEXT_HEIGHT = 110;
+const BOARD_TEXT_MIN_WIDTH = 120;
+const BOARD_TEXT_MIN_HEIGHT = 90;
 const SELF_REGISTRATION_ENABLED = false;
 const GUEST_LOGIN_ENABLED = true;
 const SESSION_TOKEN_BYTES = 24;
@@ -82,6 +94,26 @@ function shouldLogTextResizeActivity(user, textItem) {
   return true;
 }
 
+function shouldLogNoteResizeActivity(user, note) {
+  const key = `${user?.id || user?.name || "unknown"}:${note?.id || "unknown"}`;
+  const now = Date.now();
+  const lastLoggedAt = noteResizeActivityByUser.get(key) || 0;
+  if (now - lastLoggedAt < NOTE_RESIZE_ACTIVITY_THROTTLE_MS) {
+    return false;
+  }
+
+  noteResizeActivityByUser.set(key, now);
+  return true;
+}
+
+function sanitizeNoteDimension(value, fallback, min, max) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  return Math.round(Math.min(Math.max(numericValue, min), max));
+}
+
 function sanitizeUser(name) {
   return String(name || "").trim().slice(0, 30);
 }
@@ -109,6 +141,27 @@ function isEmailValid(value) {
 
 function sanitizeText(value) {
   return String(value || "").trim().slice(0, 300);
+}
+
+function sanitizeRichText(value) {
+  let s = String(value || "");
+  s = s.replace(/\r\n?/g, "\n");
+  s = s.replace(/<\s*br\s*\/?\s*>/gi, "\n");
+  s = s.replace(/<\s*\/?\s*(?:div|p)\b[^>]*>/gi, "\n");
+  s = s.replace(/<\s*(?:b|strong)\s*>/gi, "\u0001OB\u0002");
+  s = s.replace(/<\s*\/\s*(?:b|strong)\s*>/gi, "\u0001CB\u0002");
+  s = s.replace(/<\s*(?:i|em)\s*>/gi, "\u0001OI\u0002");
+  s = s.replace(/<\s*\/\s*(?:i|em)\s*>/gi, "\u0001CI\u0002");
+  s = s.replace(/<[^>]*>/g, "");
+  s = s.replace(/&(?!(?:amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);)/g, "&amp;");
+  s = s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  s = s.replace(/\u0001OB\u0002/g, "<b>").replace(/\u0001CB\u0002/g, "</b>");
+  s = s.replace(/\u0001OI\u0002/g, "<i>").replace(/\u0001CI\u0002/g, "</i>");
+  s = s.replace(/\n{3,}/g, "\n\n").trim();
+  if (s.length > 2000) {
+    s = s.slice(0, 2000);
+  }
+  return s;
 }
 
 function sanitizeColor(value) {
@@ -143,11 +196,25 @@ function sanitizeBoardTextSize(value) {
     return presets.normal;
   }
 
-  return Math.round(Math.min(Math.max(numericValue, 0.25), 12) * 100) / 100;
+  return Math.round(Math.max(numericValue, 0.25) * 100) / 100;
+}
+
+function sanitizeBoardTextDimension(value, fallback, min) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.round(Math.max(numericValue, min));
 }
 
 function textSnippet(value, maxLength = 48) {
-  const clean = String(value || "").replace(/\s+/g, " ").trim();
+  const plain = String(value || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  const clean = plain.replace(/\s+/g, " ").trim();
   if (!clean) {
     return "(bez textu)";
   }
@@ -174,47 +241,207 @@ function isAdmin(user) {
   return sanitizeRole(user?.role) === "admin";
 }
 
-function canManageNote(user, note) {
-  if (!user || !note) {
-    return false;
-  }
-
-  if (isAdmin(user)) {
-    return true;
-  }
-
-  const ownerIdentity = note.ownerId || note.ownerEmail || note.owner || note.from;
-  const userIdentity = sanitizeEmail(user.email) || user.name;
-  if (ownerIdentity === userIdentity) {
-    return true;
-  }
-
-  return sanitizeUser(note.to).toLowerCase() === sanitizeUser(user.name).toLowerCase();
+function canManageNote(_user, _note) {
+  return true;
 }
 
-function canToggleNote(user, note) {
-  if (!user || !note) {
-    return false;
-  }
-
-  if (canManageNote(user, note)) {
-    return true;
-  }
-
-  return sanitizeUser(note.to).toLowerCase() === sanitizeUser(user.name).toLowerCase();
+function canToggleNote(_user, _note) {
+  return true;
 }
 
-function canManageText(user, textItem) {
-  if (!user || !textItem) {
+function canManageText(_user, _textItem) {
+  return true;
+}
+
+function normalizeNoteStatus(value, doneFallback = false) {
+  if (value === "done" || value === "active") {
+    return value;
+  }
+  return doneFallback ? "done" : "active";
+}
+
+function getNoteStatus(note) {
+  return normalizeNoteStatus(note?.status, Boolean(note?.done));
+}
+
+function sanitizeLinkedSourceNoteId(value) {
+  const clean = String(value || "").trim();
+  return clean || null;
+}
+
+function applyNoteStatusToNote(note, nextStatus) {
+  const currentStatus = getNoteStatus(note);
+  const normalizedStatus = normalizeNoteStatus(nextStatus, currentStatus === "done");
+  if (currentStatus === normalizedStatus) {
     return false;
   }
 
-  if (isAdmin(user)) {
-    return true;
+  if (currentStatus === "active" && normalizedStatus !== "active") {
+    note.returnX = note.x;
+    note.returnY = note.y;
   }
 
-  const textOwner = textItem.ownerId || textItem.ownerEmail || textItem.owner || textItem.author;
-  return textOwner === (sanitizeEmail(user.email) || user.name);
+  if (normalizedStatus === "active") {
+    if (Number.isFinite(note.returnX) && Number.isFinite(note.returnY)) {
+      note.x = note.returnX;
+      note.y = note.returnY;
+    }
+  }
+
+  note.status = normalizedStatus;
+  note.done = normalizedStatus === "done";
+
+  if (normalizedStatus === "active") {
+    note.returnX = null;
+    note.returnY = null;
+  }
+
+  return true;
+}
+
+function resolveLinkedSourceNoteId(candidateId, linkedForUserName, currentNoteId = null) {
+  const linkedSourceNoteId = sanitizeLinkedSourceNoteId(candidateId);
+  const normalizedLinkedForUserName = sanitizeUser(linkedForUserName);
+  if (!linkedSourceNoteId || !normalizedLinkedForUserName) {
+    return null;
+  }
+
+  const sourceNote = notes.find((item) => item.id === linkedSourceNoteId);
+  if (!sourceNote) {
+    return null;
+  }
+
+  if (sourceNote.id === String(currentNoteId || "")) {
+    return null;
+  }
+
+  if (getNoteStatus(sourceNote) !== "active") {
+    return null;
+  }
+
+  return sanitizeUser(sourceNote.to) === normalizedLinkedForUserName ? sourceNote.id : null;
+}
+
+function findAutoLinkedSourceNoteId(delegatorName, linkedForUserName, currentNoteId = null) {
+  const normalizedDelegatorName = sanitizeUser(delegatorName);
+  const normalizedLinkedForUserName = sanitizeUser(linkedForUserName);
+  if (!normalizedDelegatorName || !normalizedLinkedForUserName || normalizedDelegatorName === normalizedLinkedForUserName) {
+    return null;
+  }
+
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const note = notes[index];
+    if (!note || note.id === String(currentNoteId || "")) {
+      continue;
+    }
+
+    if (getNoteStatus(note) !== "active") {
+      continue;
+    }
+
+    if (sanitizeUser(note.from) !== normalizedDelegatorName) {
+      continue;
+    }
+
+    if (sanitizeUser(note.to) !== normalizedLinkedForUserName) {
+      continue;
+    }
+
+    return note.id;
+  }
+
+  return null;
+}
+
+function findLatestIncomingAssignedNoteId(linkedForUserName, currentNoteId = null) {
+  const normalizedLinkedForUserName = sanitizeUser(linkedForUserName);
+  if (!normalizedLinkedForUserName) {
+    return null;
+  }
+
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const note = notes[index];
+    if (!note || note.id === String(currentNoteId || "")) {
+      continue;
+    }
+
+    if (getNoteStatus(note) !== "active") {
+      continue;
+    }
+
+    if (sanitizeUser(note.to) !== normalizedLinkedForUserName) {
+      continue;
+    }
+
+    if (sanitizeUser(note.from) === normalizedLinkedForUserName) {
+      continue;
+    }
+
+    return note.id;
+  }
+
+  return null;
+}
+
+function findLatestPendingDelegatedNoteForUser(userName, currentNoteId = null) {
+  const normalizedUserName = sanitizeUser(userName);
+  if (!normalizedUserName) {
+    return null;
+  }
+
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const note = notes[index];
+    if (!note || note.id === String(currentNoteId || "")) {
+      continue;
+    }
+
+    if (getNoteStatus(note) !== "active") {
+      continue;
+    }
+
+    if (!note.isDelegated) {
+      continue;
+    }
+
+    if (sanitizeLinkedSourceNoteId(note.linkedSourceNoteId)) {
+      continue;
+    }
+
+    if (sanitizeUser(note.from) !== normalizedUserName || sanitizeUser(note.to) !== normalizedUserName) {
+      continue;
+    }
+
+    return note;
+  }
+
+  return null;
+}
+
+function linkPendingDelegatedNoteToSourceNote(sourceNote, currentPendingNoteId = null) {
+  if (!sourceNote || getNoteStatus(sourceNote) !== "active") {
+    return null;
+  }
+
+  const assigneeName = sanitizeUser(sourceNote.to);
+  const authorName = sanitizeUser(sourceNote.from);
+  if (!assigneeName || !authorName || assigneeName === authorName) {
+    return null;
+  }
+
+  const pendingDelegatedNote = findLatestPendingDelegatedNoteForUser(assigneeName, currentPendingNoteId);
+  if (!pendingDelegatedNote) {
+    return null;
+  }
+
+  pendingDelegatedNote.linkedSourceNoteId = sourceNote.id;
+  return pendingDelegatedNote;
+}
+
+function resolveRequestedOrAutoLinkedSourceNoteId(candidateId, delegatorName, linkedForUserName, currentNoteId = null) {
+  return (
+    resolveLinkedSourceNoteId(candidateId, linkedForUserName, currentNoteId)
+    || findAutoLinkedSourceNoteId(delegatorName, linkedForUserName, currentNoteId)
+  );
 }
 
 function hashPassword(password) {
@@ -290,7 +517,7 @@ function getDoneLanePosition(currentNoteId) {
   const radiusX = DONE_OVAL_RADIUS_X + ring * DONE_OVAL_RING_STEP_X;
   const radiusY = DONE_OVAL_RADIUS_Y + ring * DONE_OVAL_RING_STEP_Y;
   const activeRightEdge =
-    activeNotes.length > 0 ? Math.max(...activeNotes.map((note) => note.x + NOTE_WIDTH)) : 0;
+    activeNotes.length > 0 ? Math.max(...activeNotes.map((note) => note.x + (Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH))) : 0;
   const minLeftEdgeForDone = activeRightEdge + DONE_ACTIVE_GAP_PX;
   const doneCenterX = Math.max(DONE_OVAL_BASE_CENTER_X, minLeftEdgeForDone + radiusX);
 
@@ -456,19 +683,24 @@ function restoreBoardFromSnapshot(snapshot) {
 
     notes.push({
       id: String(item?.id || `${Date.now()}-restored-note-${index}`),
-      text: sanitizeText(item?.text),
+      text: sanitizeRichText(item?.text),
       owner,
       ownerEmail: ownerEmail || undefined,
       ownerId,
       from,
+      isDelegated: Boolean(item?.isDelegated || sanitizeLinkedSourceNoteId(item?.linkedSourceNoteId)),
+      linkedSourceNoteId: sanitizeLinkedSourceNoteId(item?.linkedSourceNoteId),
       to: sanitizeUser(item?.to) || owner || from,
       priority: ["Nizka", "Stredni", "Vysoka"].includes(item?.priority) ? item.priority : "Stredni",
       deadline: String(item?.deadline || "").slice(0, 10),
-      done: Boolean(item?.done),
+      status: normalizeNoteStatus(item?.status, Boolean(item?.done)),
+      done: normalizeNoteStatus(item?.status, Boolean(item?.done)) === "done",
       color: sanitizeColor(item?.color) || "#ffe66e",
       format: sanitizeNoteFormat(item?.format),
       x: Number.isFinite(item?.position?.x) ? item.position.x : 140,
       y: Number.isFinite(item?.position?.y) ? item.position.y : 120,
+      width: sanitizeNoteDimension(item?.width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH),
+      height: sanitizeNoteDimension(item?.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT),
       returnX: Number.isFinite(item?.returnX) ? item.returnX : null,
       returnY: Number.isFinite(item?.returnY) ? item.returnY : null
     });
@@ -483,6 +715,8 @@ function restoreBoardFromSnapshot(snapshot) {
       ownerEmail: sanitizeEmail(item?.ownerEmail) || undefined,
       ownerId: sanitizeEmail(item?.ownerId || item?.ownerEmail) || sanitizeUser(item?.owner || item?.author),
       size: sanitizeBoardTextSize(item?.size),
+      width: sanitizeBoardTextDimension(item?.width, BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH),
+      height: sanitizeBoardTextDimension(item?.height, BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT),
       x: Number.isFinite(item?.position?.x) ? item.position.x : 180,
       y: Number.isFinite(item?.position?.y) ? item.position.y : 120
     });
@@ -554,14 +788,19 @@ function saveBoardSnapshot(savedBy) {
       ownerEmail: note.ownerEmail || null,
       ownerId: note.ownerId || null,
       from: note.from,
+      isDelegated: Boolean(note.isDelegated),
+      linkedSourceNoteId: sanitizeLinkedSourceNoteId(note.linkedSourceNoteId),
       to: note.to,
       priority: note.priority,
       deadline: note.deadline,
+      status: getNoteStatus(note),
       done: note.done,
       color: note.color,
       format: sanitizeNoteFormat(note.format),
       returnX: Number.isFinite(note.returnX) ? note.returnX : null,
       returnY: Number.isFinite(note.returnY) ? note.returnY : null,
+      width: Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH,
+      height: Number.isFinite(note.height) ? note.height : NOTE_DEFAULT_HEIGHT,
       position: {
         x: note.x,
         y: note.y
@@ -575,6 +814,8 @@ function saveBoardSnapshot(savedBy) {
       ownerEmail: item.ownerEmail || null,
       ownerId: item.ownerId || null,
       size: sanitizeBoardTextSize(item.size),
+      width: sanitizeBoardTextDimension(item.width, BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH),
+      height: sanitizeBoardTextDimension(item.height, BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT),
       position: {
         x: item.x,
         y: item.y
@@ -787,14 +1028,19 @@ io.on("connection", (socket) => {
       return;
     }
 
+    const assigneeName = sanitizeUser(payload?.to) || user.name;
+    const isDelegated = Boolean(payload?.isDelegated);
+
     const note = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text: sanitizeText(payload?.text),
+      text: sanitizeRichText(payload?.text),
       owner: user.name,
       ownerEmail: sanitizeEmail(user.email),
       ownerId: sanitizeEmail(user.email),
       from: user.name,
-      to: sanitizeUser(payload?.to) || user.name,
+      isDelegated,
+      linkedSourceNoteId: isDelegated && assigneeName === user.name ? findLatestIncomingAssignedNoteId(user.name) : null,
+      to: assigneeName,
       priority: ["Nizka", "Stredni", "Vysoka"].includes(payload?.priority)
         ? payload.priority
         : "Stredni",
@@ -803,8 +1049,11 @@ io.on("connection", (socket) => {
       format: sanitizeNoteFormat(payload?.format),
       x: Number.isFinite(payload?.x) ? payload.x : 140,
       y: Number.isFinite(payload?.y) ? payload.y : 120,
+      width: sanitizeNoteDimension(payload?.width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH),
+      height: sanitizeNoteDimension(payload?.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT),
       returnX: null,
       returnY: null,
+      status: "active",
       done: false
     };
 
@@ -813,7 +1062,11 @@ io.on("connection", (socket) => {
     }
 
     notes.push(note);
+    const relinkedNote = linkPendingDelegatedNoteToSourceNote(note, note.id);
     io.emit("note:created", note);
+    if (relinkedNote) {
+      io.emit("note:updated", relinkedNote);
+    }
     addActivity(
       `${note.from} vytvořil/a lístek: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
         note.deadline ? ` | termín ${note.deadline}` : ""
@@ -855,7 +1108,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (note.done) {
+    if (getNoteStatus(note) !== "active") {
       return;
     }
 
@@ -865,10 +1118,46 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("note:moved", { id: note.id, x: note.x, y: note.y });
   });
 
+  socket.on("note:resize", ({ id, width, height }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+
+    const note = notes.find((item) => item.id === String(id || ""));
+    if (!note) {
+      ack?.({ ok: false, message: "Lístek už neexistuje." });
+      return;
+    }
+
+    if (getNoteStatus(note) !== "active") {
+      ack?.({ ok: false, message: "Velikost můžeš měnit jen u aktivního lístku na ploše." });
+      return;
+    }
+
+    if (!canManageNote(user, note)) {
+      ack?.({ ok: false, message: "Velikost tohoto lístku může změnit jen jeho autor nebo admin." });
+      return;
+    }
+
+    const previousWidth = note.width;
+    const previousHeight = note.height;
+    note.width = sanitizeNoteDimension(width, note.width || NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH);
+    note.height = sanitizeNoteDimension(height, note.height || NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT);
+    const sizeChanged = note.width !== previousWidth || note.height !== previousHeight;
+
+    io.emit("note:resized", { id: note.id, width: note.width, height: note.height });
+    if (sizeChanged && shouldLogNoteResizeActivity(user, note)) {
+      addActivity(`${user.name} změnil/a velikost lístku: "${textSnippet(note.text)}" pro ${note.to}`);
+    }
+    ack?.({ ok: true, note });
+  });
+
   socket.on("text:move", ({ id, x, y }) => {
     const user = usersBySocket.get(socket.id);
     const textItem = boardTexts.find((item) => item.id === id);
-    if (!textItem || !user || !canManageText(user, textItem)) {
+    if (!textItem || !user) {
       return;
     }
 
@@ -891,11 +1180,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (!canManageText(user, textItem)) {
-      ack?.({ ok: false, message: "Tento text může upravit jen jeho autor nebo admin." });
-      return;
-    }
-
     const nextText = sanitizeText(text);
     if (!nextText) {
       ack?.({ ok: false, message: "Text nemůže být prázdný." });
@@ -909,7 +1193,7 @@ io.on("connection", (socket) => {
     ack?.({ ok: true, item: textItem });
   });
 
-  socket.on("text:resize", ({ id, size }, ack) => {
+  socket.on("text:resize", ({ id, width, height, size }, ack) => {
     const user = usersBySocket.get(socket.id);
     if (!user) {
       ack?.({ ok: false, message: "Nejdříve se přihlas." });
@@ -922,17 +1206,14 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (!canManageText(user, textItem)) {
-      ack?.({ ok: false, message: "Velikost tohoto textu může změnit jen jeho autor nebo admin." });
-      return;
-    }
+    const previousWidth = textItem.width;
+    const previousHeight = textItem.height;
+    textItem.width = sanitizeBoardTextDimension(width, textItem.width || BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH);
+    textItem.height = sanitizeBoardTextDimension(height, textItem.height || BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT);
+    textItem.size = sanitizeBoardTextSize(size ?? textItem.size);
+    const sizeChanged = textItem.width !== previousWidth || textItem.height !== previousHeight;
 
-    const previousSize = sanitizeBoardTextSize(textItem.size);
-    const nextSize = sanitizeBoardTextSize(size);
-    const sizeChanged = nextSize !== previousSize;
-
-    textItem.size = nextSize;
-    io.emit("text:updated", textItem);
+    io.emit("text:resized", { id: textItem.id, width: textItem.width, height: textItem.height, size: textItem.size });
     if (sizeChanged && shouldLogTextResizeActivity(user, textItem)) {
       addActivity(`${user.name} změnil/a velikost textu: "${textSnippet(textItem.text)}" na ploše`);
     }
@@ -949,12 +1230,6 @@ io.on("connection", (socket) => {
     const textIndex = boardTexts.findIndex((item) => item.id === String(id || ""));
     if (textIndex === -1) {
       ack?.({ ok: false, message: "Text už neexistuje." });
-      return;
-    }
-
-    const textItem = boardTexts[textIndex];
-    if (!canManageText(user, textItem)) {
-      ack?.({ ok: false, message: "Tento text může smazat jen jeho autor nebo admin." });
       return;
     }
 
@@ -977,31 +1252,17 @@ io.on("connection", (socket) => {
       return;
     }
 
-    note.done = !note.done;
-    let moved = false;
+    const currentStatus = getNoteStatus(note);
+    const nextStatus = currentStatus === "done" ? "active" : "done";
+    applyNoteStatusToNote(note, nextStatus);
 
-    if (note.done) {
-      note.returnX = note.x;
-      note.returnY = note.y;
-      const lanePosition = getDoneLanePosition(note.id);
-      note.x = lanePosition.x;
-      note.y = lanePosition.y;
-      moved = true;
-    } else if (Number.isFinite(note.returnX) && Number.isFinite(note.returnY)) {
-      note.x = note.returnX;
-      note.y = note.returnY;
-      moved = true;
-      note.returnX = null;
-      note.returnY = null;
-    }
-
-    io.emit("note:toggled", { id: note.id, done: note.done, x: note.x, y: note.y, moved });
+    io.emit("note:updated", note);
     addActivity(
-      `${user.name} nastavil/a stav lístku: "${textSnippet(note.text, 36)}" pro ${note.to} | ${note.done ? "Vyřešeno" : "Aktivní"}${
-        moved ? " | přesun do vyřešených" : ""
-      }`
+      nextStatus === "done"
+        ? `${user.name} přesunul/a lístek: "${textSnippet(note.text, 36)}" pro ${note.to} do vyřešených`
+        : `${user.name} obnovil/a lístek: "${textSnippet(note.text, 36)}" pro ${note.to} zpět na plochu`
     );
-    ack?.({ ok: true, id: note.id, done: note.done });
+    ack?.({ ok: true, id: note.id, status: nextStatus });
   });
 
   socket.on("note:update", (payload, ack) => {
@@ -1017,12 +1278,12 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (!canManageNote(user, note)) {
-      ack?.({ ok: false, message: "Tento lístek může upravit jen autor nebo admin." });
+    if (getNoteStatus(note) !== "active") {
+      ack?.({ ok: false, message: "Upravovat můžeš jen aktivní lístek na ploše." });
       return;
     }
 
-    const text = sanitizeText(payload?.text);
+    const text = sanitizeRichText(payload?.text);
     if (!text) {
       ack?.({ ok: false, message: "Doplň text lístku." });
       return;
@@ -1030,6 +1291,11 @@ io.on("connection", (socket) => {
 
     note.text = text;
     note.to = sanitizeUser(payload?.to) || note.to;
+    const isDelegated = Boolean(payload?.isDelegated);
+    note.isDelegated = isDelegated;
+    note.linkedSourceNoteId = isDelegated && note.to === user.name
+      ? findLatestIncomingAssignedNoteId(user.name, note.id)
+      : null;
     note.priority = ["Nizka", "Stredni", "Vysoka"].includes(payload?.priority)
       ? payload.priority
       : note.priority;
@@ -1037,7 +1303,11 @@ io.on("connection", (socket) => {
     note.color = sanitizeColor(payload?.color) || note.color;
     note.format = sanitizeNoteFormat(payload?.format);
 
+    const relinkedNote = linkPendingDelegatedNoteToSourceNote(note, note.id);
     io.emit("note:updated", note);
+    if (relinkedNote) {
+      io.emit("note:updated", relinkedNote);
+    }
     addActivity(
       `${user.name} upravil/a lístek: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
         note.deadline ? ` | termín ${note.deadline}` : ""
@@ -1053,18 +1323,18 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const noteIndex = notes.findIndex((item) => item.id === String(id || ""));
-    if (noteIndex === -1) {
+    const note = notes.find((item) => item.id === String(id || ""));
+    if (!note) {
       ack?.({ ok: false, message: "Lístek už neexistuje." });
       return;
     }
 
-    const note = notes[noteIndex];
     if (!canManageNote(user, note)) {
       ack?.({ ok: false, message: "Tento lístek může smazat jen jeho autor nebo admin." });
       return;
     }
 
+    const noteIndex = notes.findIndex((item) => item.id === note.id);
     const [removed] = notes.splice(noteIndex, 1);
     io.emit("note:deleted", { id: removed.id });
     addActivity(`${user.name} smazal/a lístek: "${textSnippet(removed.text)}" pro ${removed.to}`);
@@ -1088,17 +1358,10 @@ io.on("connection", (socket) => {
     }
 
     let removedCount = 0;
-    let deniedCount = 0;
 
     uniqueIds.forEach((id) => {
       const noteIndex = notes.findIndex((item) => item.id === id);
       if (noteIndex === -1) {
-        return;
-      }
-
-      const note = notes[noteIndex];
-      if (!canManageNote(user, note)) {
-        deniedCount += 1;
         return;
       }
 
@@ -1111,7 +1374,7 @@ io.on("connection", (socket) => {
       addActivity(`${user.name} hromadně smazal/a vybrané lístky (${removedCount})`);
     }
 
-    ack?.({ ok: true, removedCount, deniedCount });
+    ack?.({ ok: true, removedCount, deniedCount: 0 });
   });
 
   socket.on("note:markManyDone", ({ ids }, ack) => {
@@ -1131,7 +1394,6 @@ io.on("connection", (socket) => {
     }
 
     let updatedCount = 0;
-    let deniedCount = 0;
     let alreadyDoneCount = 0;
 
     uniqueIds.forEach((id) => {
@@ -1140,32 +1402,26 @@ io.on("connection", (socket) => {
         return;
       }
 
-      if (!canToggleNote(user, note)) {
-        deniedCount += 1;
-        return;
-      }
-
-      if (note.done) {
+      if (getNoteStatus(note) === "done") {
         alreadyDoneCount += 1;
         return;
       }
 
-      note.done = true;
-      note.returnX = note.x;
-      note.returnY = note.y;
-      const lanePosition = getDoneLanePosition(note.id);
-      note.x = lanePosition.x;
-      note.y = lanePosition.y;
+      if (getNoteStatus(note) !== "active") {
+        return;
+      }
+
+      applyNoteStatusToNote(note, "done");
       updatedCount += 1;
 
-      io.emit("note:toggled", { id: note.id, done: true, x: note.x, y: note.y, moved: true });
+      io.emit("note:updated", note);
     });
 
     if (updatedCount > 0) {
-      addActivity(`${user.name} hromadně označil/a lístky jako vyřešené (${updatedCount})`);
+      addActivity(`${user.name} hromadně přesunul/a lístky do vyřešených (${updatedCount})`);
     }
 
-    ack?.({ ok: true, updatedCount, deniedCount, alreadyDoneCount });
+    ack?.({ ok: true, updatedCount, deniedCount: 0, alreadyDoneCount });
   });
 
   socket.on("note:deleteAll", (_payload, ack) => {
@@ -1175,27 +1431,24 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const removable = isAdmin(user)
-      ? notes
-      : notes.filter((item) => canManageNote(user, item));
-    const removedCount = removable.length;
+    const activeIds = notes.filter((note) => getNoteStatus(note) === "active").map((note) => note.id);
+    const removedCount = activeIds.length;
     if (removedCount === 0) {
       ack?.({ ok: true, removedCount: 0 });
       return;
     }
 
-    for (let index = notes.length - 1; index >= 0; index -= 1) {
-      const note = notes[index];
-      if (isAdmin(user) || canManageNote(user, note)) {
-        notes.splice(index, 1);
+    activeIds.forEach((id) => {
+      const noteIndex = notes.findIndex((item) => item.id === id);
+      if (noteIndex === -1) {
+        return;
       }
-    }
-    io.emit("notes:cleared", { removedCount });
-    addActivity(
-      isAdmin(user)
-        ? `${user.name} (admin) smazal/a lístky na nástěnce (${removedCount})`
-        : `${user.name} smazal/a své lístky (${removedCount})`
-    );
+
+      const [removed] = notes.splice(noteIndex, 1);
+      io.emit("note:deleted", { id: removed.id });
+    });
+
+    addActivity(`${user.name} smazal/a všechny aktivní lístky (${removedCount})`);
     ack?.({ ok: true, removedCount });
   });
 

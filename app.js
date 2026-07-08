@@ -8,14 +8,27 @@ const SCALE_MIN = 50;
 const SCALE_MAX = 120;
 const SCALE_STEP = 5;
 const PREVIEW_ANIMATION_MS = 220;
-const NOTE_HOVER_PREVIEW_DELAY_MS = 3000;
 const ALIGN_THRESHOLD_PX = 6;
 const EMOJI_OPTIONS = [
+  // Obličeje
   "🙂", "😀", "😄", "😁", "😆", "😂", "🤣", "😊", "😉", "😍", "🤩", "😎",
-  "🤔", "🙄", "😬", "😅", "😇", "😴", "😡", "😢", "😭", "😱", "🤯", "🥳",
-  "👍", "👎", "👏", "🙌", "🙏", "🤝", "💪", "👀", "💡", "✅", "☑️", "❌",
-  "⚠️", "❗", "❓", "⭐", "🔥", "🚀", "🎯", "🏆", "📌", "📎", "📝", "📅",
-  "⏰", "🔔", "💬", "📣", "❤️", "💙", "💚", "💛", "💜", "☕", "🍀", "🎉"
+  "🤔", "🙄", "😬", "😅", "😇", "😴", "😐", "😑", "😶", "😏", "🤭", "😮",
+  "😡", "😢", "😭", "😱", "🤯", "🥳", "😓", "🙃", "🤗", "🥰", "🤩", "😔",
+  "😯", "🤨", "😒", "🤡", "🥺", "🤮", "🤧", "🥵", "🥶", "🤠", "🦸", "🧐",
+  // Gesta a ruce
+  "👍", "👎", "👏", "🙌", "🙏", "🤝", "💪", "👀", "✌️", "🤞", "👌", "☝️",
+  "👆", "👇", "👈", "👉", "✋", "🤚", "🦾", "🤲", "🤜", "❤️", "💚", "💙",
+  // Symboly a značky
+  "💡", "✅", "☑️", "❌", "⚠️", "❗", "❓", "⭐", "🔥", "🚀", "🎯", "🏆",
+  "📌", "📎", "📝", "📅", "⏰", "🔔", "💬", "📣", "🔍", "🔒", "🔓", "🛡️",
+  "♻️", "⬆️", "⬇️", "▶️", "⏹️", "🔄", "🔁", "💯", "🆕", "🆗", "🆙", "🆘",
+  // Příroda a zvířata
+  "🍀", "🌸", "🌻", "🌳", "🌱", "🐶", "🐱", "🐻", "🐼", "🐢", "🦇", "🐺",
+  "🦁", "🐮", "🐍", "🐄", "🦅", "🐉", "🦄", "🌈",
+  // Jídlo a pití
+  "☕", "🍷", "🍺", "🍻", "🥂", "🍕", "🚗", "🍔", "🍜", "🍱", "🍉", "🍯",
+  // Oslavy
+  "🎉", "🎈", "🎁", "🎂", "😀", "🥂", "🥇", "👑"
 ];
 
 let selectedNoteColor = noteColors[0];
@@ -33,6 +46,13 @@ let draggedSelection = null;
 let activePointerId = null;
 let dragOffset = { x: 0, y: 0 };
 let lastMoveEmitAt = 0;
+let pendingNoteDrag = null;
+
+let resizingNote = null;
+let resizingNoteElement = null;
+let activeNoteResizePointerId = null;
+let noteResizeStart = { x: 0, y: 0, width: 188, height: 146, pointerX: 0, pointerY: 0 };
+let lastNoteResizeEmitAt = 0;
 
 let pendingDeleteId = null;
 let pendingDeleteTimer = null;
@@ -44,7 +64,7 @@ let activeBoardTextId = null;
 let resizingBoardText = null;
 let resizingBoardTextElement = null;
 let activeTextResizePointerId = null;
-let textResizeStart = { x: 0, y: 0, size: 1.8 };
+let textResizeStart = { x: 0, y: 0, width: 340, height: 110, size: 1.8 };
 let activeTextPointerId = null;
 let lastTextMoveEmitAt = 0;
 let lastTextResizeEmitAt = 0;
@@ -60,10 +80,16 @@ let canvasWidth = 2400;
 let canvasHeight = 1600;
 let snapEnabled = true;
 let notePreviewClosingTimer = null;
+let noteArchiveClosingTimer = null;
+let confirmModalClosingTimer = null;
 let activePreviewNoteId = null;
 let isPreviewEditing = false;
 let verticalGuideEl = null;
 let horizontalGuideEl = null;
+let noteConnectionsSvg = null;
+let lastRichEditorSelection = null;
+let pendingInlineFormatSelection = null;
+let pendingConfirmAction = null;
 
 const GRID_MIN = 2;
 const GRID_MAX = 40;
@@ -77,8 +103,17 @@ const CLIENT_DONE_OVAL_RING_STEP_X = 170;
 const CLIENT_DONE_OVAL_RING_STEP_Y = 130;
 const CLIENT_DONE_ACTIVE_GAP_PX = 500;
 const NOTE_BASE_WIDTH = 206;
+const NOTE_DEFAULT_WIDTH = 188;
+const NOTE_DEFAULT_HEIGHT = 146;
+const NOTE_MIN_WIDTH = 120;
+const NOTE_MIN_HEIGHT = 90;
+const NOTE_MAX_WIDTH = 600;
+const NOTE_MAX_HEIGHT = 480;
+const NOTE_DRAG_START_THRESHOLD = 6;
 const BOARD_TEXT_WIDTH = 340;
 const BOARD_TEXT_HEIGHT = 110;
+const SVG_NS = "http://www.w3.org/2000/svg";
+const NOTE_CONNECTION_VERTICAL_CENTER_RATIO = 0.42;
 
 const loginScreen = document.querySelector("#login-screen");
 const loginForm = document.querySelector("#login-form");
@@ -93,13 +128,18 @@ const logoutBtn = document.querySelector("#logout-btn");
 
 const board = document.querySelector("#board");
 const boardCanvas = document.querySelector("#board-canvas") || board;
+const archiveIndicator = document.querySelector("#archive-indicator");
+const archiveIndicatorTotal = document.querySelector("#archive-indicator-total");
+const archiveIndicatorDone = document.querySelector("#archive-indicator-done");
 const noteTemplate = document.querySelector("#note-template");
 const noteForm = document.querySelector("#note-form");
 const noteText = document.querySelector("#note-text");
 const pasteNoteTextBtn = document.querySelector("#paste-note-text");
 const noteFormatToolbar = document.querySelector('[data-format-toolbar="note"]');
 const fromUser = document.querySelector("#from-user");
+const toUserWrap = document.querySelector("#note-to-user-wrap");
 const toUser = document.querySelector("#to-user");
+const noteIsDelegated = document.querySelector("#note-is-delegated");
 const priority = document.querySelector("#priority");
 const deadline = document.querySelector("#deadline");
 const presence = document.querySelector("#presence");
@@ -128,22 +168,32 @@ const notePreviewEditBtn = document.querySelector("#note-preview-edit-btn");
 const notePreviewEditForm = document.querySelector("#note-preview-edit-form");
 const notePreviewEditText = document.querySelector("#note-preview-edit-text");
 const notePreviewEditFrom = document.querySelector("#note-preview-edit-from");
+const notePreviewEditToWrap = document.querySelector("#note-preview-edit-to-wrap");
 const notePreviewEditTo = document.querySelector("#note-preview-edit-to");
+const notePreviewEditIsDelegated = document.querySelector("#note-preview-edit-is-delegated");
 const notePreviewEditPriority = document.querySelector("#note-preview-edit-priority");
 const notePreviewEditDeadline = document.querySelector("#note-preview-edit-deadline");
 const notePreviewEditColorPalette = document.querySelector("#note-preview-edit-color-palette");
 const notePreviewEditFormatToolbar = document.querySelector('[data-format-toolbar="preview-edit"]');
 const notePreviewCancelBtn = document.querySelector("#note-preview-cancel-btn");
 const notePreviewEditStatus = document.querySelector("#note-preview-edit-status");
+const noteArchive = document.querySelector("#note-archive");
+const noteArchiveClose = document.querySelector("#note-archive-close");
+const noteArchiveSummary = document.querySelector("#note-archive-summary");
+const noteArchiveDoneCount = document.querySelector("#note-archive-done-count");
+const noteArchiveDoneList = document.querySelector("#note-archive-done-list");
+const confirmModal = document.querySelector("#confirm-modal");
+const confirmModalTitle = document.querySelector("#confirm-modal-title");
+const confirmModalMessage = document.querySelector("#confirm-modal-message");
+const confirmModalCancel = document.querySelector("#confirm-modal-cancel");
+const confirmModalConfirm = document.querySelector("#confirm-modal-confirm");
 const toolDock = document.querySelector(".tool-dock");
 const toolDockPanel = document.querySelector("#tool-dock-panel");
 const dockToggleNote = document.querySelector("#dock-toggle-note");
 const dockToggleFilter = document.querySelector("#dock-toggle-filter");
-const dockToggleBoard = document.querySelector("#dock-toggle-board");
 const dockToggleActions = document.querySelector("#dock-toggle-actions");
 const dockSectionNote = document.querySelector("#dock-section-note");
 const dockSectionFilter = document.querySelector("#dock-section-filter");
-const dockSectionBoard = document.querySelector("#dock-section-board");
 const dockSectionActions = document.querySelector("#dock-section-actions");
 const boardInlineComposer = document.querySelector("#board-inline-composer");
 const boardInlineTitle = document.querySelector("#board-inline-title");
@@ -152,7 +202,9 @@ const boardInlineText = document.querySelector("#board-inline-text");
 const boardInlineNoteFields = document.querySelector("#board-inline-note-fields");
 const boardInlinePasteNoteTextBtn = document.querySelector("#board-inline-paste-note-text");
 const boardInlineFromUser = document.querySelector("#board-inline-from-user");
+const boardInlineToUserWrap = document.querySelector("#board-inline-to-user-wrap");
 const boardInlineToUser = document.querySelector("#board-inline-to-user");
+const boardInlineIsDelegated = document.querySelector("#board-inline-is-delegated");
 const boardInlinePriority = document.querySelector("#board-inline-priority");
 const boardInlineDeadline = document.querySelector("#board-inline-deadline");
 const boardInlinePalette = document.querySelector("#board-inline-palette");
@@ -173,8 +225,6 @@ let boardInlineCreateMode = "text";
 let boardQuickCreateDraftPosition = null;
 let previewEditSelectedColor = noteColors[0];
 let pendingPreviewUpdateTimer = null;
-let pendingHoverPreviewTimer = null;
-let pendingHoverPreviewNoteId = null;
 
 const NOTE_FORM_TITLE = "Nový lístek";
 const NOTE_FORM_CONTROL_TITLE = "Obsah a delegace";
@@ -188,7 +238,8 @@ const NOTE_FORMAT_SIZES = ["small", "normal", "large"];
 const NOTE_FORMAT_ALIGNS = ["left", "center", "right"];
 const BOARD_TEXT_MIN_SIZE = 0.25;
 const BOARD_TEXT_DEFAULT_SIZE = 1.8;
-const BOARD_TEXT_MAX_SIZE = 12;
+const BOARD_TEXT_MIN_WIDTH = 120;
+const BOARD_TEXT_MIN_HEIGHT = 90;
 const BOARD_TEXT_SIZE_PRESETS = {
   small: 1.25,
   normal: BOARD_TEXT_DEFAULT_SIZE,
@@ -204,16 +255,70 @@ function normalizeNoteFormat(value) {
   };
 }
 
+function normalizeNoteStatus(value, doneFallback = false) {
+  if (value === "done" || value === "active") {
+    return value;
+  }
+  return doneFallback ? "done" : "active";
+}
+
+function getNoteStatus(note) {
+  return normalizeNoteStatus(note?.status, Boolean(note?.done));
+}
+
+function sanitizeLinkedSourceNoteId(value) {
+  const clean = String(value || "").trim();
+  return clean || null;
+}
+
+function isActiveNote(note) {
+  return getNoteStatus(note) === "active";
+}
+
+function isResolvedLinkedNoteWaitingForSource(note) {
+  if (getNoteStatus(note) !== "done") {
+    return false;
+  }
+
+  const sourceNote = getLinkedSourceNote(note);
+  return Boolean(sourceNote && getNoteStatus(sourceNote) === "active");
+}
+
+function isNoteVisibleOnBoard(note) {
+  return isActiveNote(note) || isResolvedLinkedNoteWaitingForSource(note);
+}
+
+function isArchivedNote(note) {
+  return getNoteStatus(note) === "done" && !isResolvedLinkedNoteWaitingForSource(note);
+}
+
+function formatNoteStatusLabel(note) {
+  const status = getNoteStatus(note);
+  if (status === "done") {
+    return "Vyřešeno";
+  }
+  return "Aktivní";
+}
+
+function getLinkedSourceNote(note) {
+  const linkedSourceNoteId = sanitizeLinkedSourceNoteId(note?.linkedSourceNoteId);
+  if (!linkedSourceNoteId) {
+    return null;
+  }
+  return notes.find((item) => item.id === linkedSourceNoteId) || null;
+}
+
 function getNoteFormatFromToolbar(toolbar) {
   if (!toolbar) {
     return normalizeNoteFormat();
   }
 
+  const activeSizeButton = toolbar.querySelector('[data-format-field="size"].active');
+  const activeAlignButton = toolbar.querySelector('[data-format-field="align"].active');
+
   return normalizeNoteFormat({
-    bold: toolbar.querySelector('[data-format-action="bold"]')?.getAttribute("aria-pressed") === "true",
-    italic: toolbar.querySelector('[data-format-action="italic"]')?.getAttribute("aria-pressed") === "true",
-    size: toolbar.querySelector('[data-format-field="size"]')?.value,
-    align: toolbar.querySelector('[data-format-field="align"]')?.value
+    size: activeSizeButton?.dataset.formatValue,
+    align: activeAlignButton?.dataset.formatValue
   });
 }
 
@@ -223,29 +328,265 @@ function setNoteFormatToolbar(toolbar, format) {
   }
 
   const nextFormat = normalizeNoteFormat(format);
-  const boldButton = toolbar.querySelector('[data-format-action="bold"]');
-  const italicButton = toolbar.querySelector('[data-format-action="italic"]');
-  const sizeSelect = toolbar.querySelector('[data-format-field="size"]');
-  const alignSelect = toolbar.querySelector('[data-format-field="align"]');
 
-  [
-    [boldButton, nextFormat.bold],
-    [italicButton, nextFormat.italic]
-  ].forEach(([button, isPressed]) => {
-    button?.setAttribute("aria-pressed", isPressed ? "true" : "false");
-    button?.classList.toggle("active", isPressed);
+  toolbar.querySelectorAll('[data-format-field="size"]').forEach((button) => {
+    const isActive = button.dataset.formatValue === nextFormat.size;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
   });
 
-  if (sizeSelect) {
-    sizeSelect.value = nextFormat.size;
+  toolbar.querySelectorAll('[data-format-field="align"]').forEach((button) => {
+    const isActive = button.dataset.formatValue === nextFormat.align;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function getEditorContainer(editor) {
+  return editor?.closest?.("#note-form, #board-inline-composer, #note-preview-edit-form") || null;
+}
+
+function getEditorToolbar(editor) {
+  return getEditorContainer(editor)?.querySelector(".text-format-toolbar") || null;
+}
+
+function getSelectionEditor() {
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0 || !selection.anchorNode) {
+    return null;
   }
-  if (alignSelect) {
-    alignSelect.value = nextFormat.align;
+
+  let node = selection.anchorNode;
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
   }
+
+  return node instanceof HTMLElement ? node.closest(".rich-editor") : null;
+}
+
+function saveSelectionForEditor(editor) {
+  const selection = window.getSelection?.();
+  if (!editor || !selection || selection.rangeCount === 0 || !selection.anchorNode || !editor.contains(selection.anchorNode)) {
+    return;
+  }
+
+  lastRichEditorSelection = {
+    editor,
+    range: selection.getRangeAt(0).cloneRange()
+  };
+}
+
+function restoreRangeForEditor(editor, range) {
+  if (!editor || !range) {
+    return false;
+  }
+
+  const selection = window.getSelection?.();
+  if (!selection) {
+    return false;
+  }
+
+  editor.focus();
+  selection.removeAllRanges();
+  selection.addRange(range.cloneRange());
+  return true;
+}
+
+function restoreSelectionForEditor(editor) {
+  if (!editor || !lastRichEditorSelection || lastRichEditorSelection.editor !== editor) {
+    return false;
+  }
+
+  return restoreRangeForEditor(editor, lastRichEditorSelection.range);
+}
+
+function clearPendingInlineFormatSelection(editor = null) {
+  if (!editor || pendingInlineFormatSelection?.editor === editor) {
+    pendingInlineFormatSelection = null;
+  }
+}
+
+function rememberPendingInlineFormatSelection(editor) {
+  const selection = window.getSelection?.();
+  if (!editor || !selection || selection.rangeCount === 0 || !selection.anchorNode || !editor.contains(selection.anchorNode)) {
+    clearPendingInlineFormatSelection(editor);
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (range.collapsed) {
+    clearPendingInlineFormatSelection(editor);
+    return;
+  }
+
+  let bold = false;
+  let italic = false;
+  try {
+    bold = document.queryCommandState("bold");
+  } catch {
+    bold = false;
+  }
+  try {
+    italic = document.queryCommandState("italic");
+  } catch {
+    italic = false;
+  }
+
+  pendingInlineFormatSelection = {
+    editor,
+    range: range.cloneRange(),
+    bold,
+    italic
+  };
+}
+
+function getPendingInlineFormatState(editor) {
+  const selection = window.getSelection?.();
+  if (!editor || !selection || selection.rangeCount === 0 || !isSelectionInsideEditor(editor)) {
+    return null;
+  }
+
+  if (!pendingInlineFormatSelection || pendingInlineFormatSelection.editor !== editor) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) {
+    return null;
+  }
+
+  return pendingInlineFormatSelection;
+}
+
+function moveCaretAfterInlineFormat(editor, tagNames) {
+  const selection = window.getSelection?.();
+  if (!editor || !selection || selection.rangeCount === 0) {
+    return;
+  }
+
+  editor.focus();
+
+  const range = selection.getRangeAt(0).cloneRange();
+  range.collapse(false);
+
+  let node = range.endContainer;
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
+  }
+
+  let formatNode = node instanceof HTMLElement ? node.closest(tagNames.join(",")) : null;
+  while (formatNode instanceof HTMLElement && formatNode.parentElement && formatNode.parentElement !== editor && formatNode.parentElement.closest(tagNames.join(","))) {
+    formatNode = formatNode.parentElement.closest(tagNames.join(","));
+  }
+
+  if (formatNode instanceof HTMLElement && editor.contains(formatNode)) {
+    const caretRange = document.createRange();
+    caretRange.setStartAfter(formatNode);
+    caretRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caretRange);
+    return;
+  }
+
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function isSelectionInsideEditor(editor) {
+  const selection = window.getSelection?.();
+  return Boolean(editor && selection?.anchorNode && editor.contains(selection.anchorNode));
+}
+
+function hasInlineFormatInSelection(editor, tags) {
+  if (!isSelectionInsideEditor(editor)) {
+    return false;
+  }
+
+  let node = window.getSelection()?.anchorNode || null;
+  if (node?.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
+  }
+
+  while (node instanceof HTMLElement && node !== editor) {
+    if (tags.includes(node.tagName.toLowerCase())) {
+      return true;
+    }
+    node = node.parentElement;
+  }
+
+  return false;
+}
+
+function getEditorFormatState(editor) {
+  if (!editor) {
+    return normalizeNoteFormat();
+  }
+
+  const size = NOTE_FORMAT_SIZES.find((value) => editor.classList.contains(`note-text-size-${value}`)) || "normal";
+  const inlineAlign = editor.style.textAlign || "";
+  const computedAlign = window.getComputedStyle(editor).textAlign;
+  const align = NOTE_FORMAT_ALIGNS.includes(inlineAlign)
+    ? inlineAlign
+    : NOTE_FORMAT_ALIGNS.includes(computedAlign)
+      ? computedAlign
+      : "left";
+
+  return normalizeNoteFormat({ size, align });
+}
+
+function normalizeInlineTypingMode(editor) {
+  const selection = window.getSelection?.();
+  if (!editor || !selection) {
+    return;
+  }
+
+  if (!isSelectionInsideEditor(editor)) {
+    if (document.activeElement !== editor) {
+      return;
+    }
+    const caretRange = document.createRange();
+    caretRange.selectNodeContents(editor);
+    caretRange.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(caretRange);
+  }
+
+  if (selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) {
+    return;
+  }
+
+  [["bold", ["b", "strong"]], ["italic", ["i", "em"]]].forEach(([action, tags]) => {
+    let commandActive = false;
+    try {
+      commandActive = document.queryCommandState(action);
+    } catch {
+      commandActive = false;
+    }
+
+    if (!commandActive || hasInlineFormatInSelection(editor, tags)) {
+      return;
+    }
+
+    try {
+      document.execCommand(action, false);
+    } catch {
+      /* ignore unsupported browsers */
+    }
+  });
 }
 
 function resetNoteFormatToolbar(toolbar) {
   setNoteFormatToolbar(toolbar, normalizeNoteFormat());
+
+  const editor = toolbar?.closest?.("#note-form, #board-inline-composer, #note-preview-edit-form")?.querySelector?.(".rich-editor");
+  if (editor) {
+    applyToolbarFormatToEditor(editor, toolbar);
+  }
 }
 
 function applyNoteFormatToElement(element, format) {
@@ -256,9 +597,105 @@ function applyNoteFormatToElement(element, format) {
   const nextFormat = normalizeNoteFormat(format);
   element.classList.remove(...NOTE_FORMAT_SIZE_CLASSES);
   element.classList.add(`note-text-size-${nextFormat.size}`);
-  element.style.fontWeight = nextFormat.bold ? "700" : "";
-  element.style.fontStyle = nextFormat.italic ? "italic" : "";
   element.style.textAlign = nextFormat.align;
+}
+
+const RICH_MAX_LENGTH = 2000;
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function sanitizeRichText(value) {
+  let s = String(value || "");
+  s = s.replace(/\r\n?/g, "\n");
+  s = s.replace(/<\s*br\s*\/?\s*>/gi, "\n");
+  s = s.replace(/<\s*\/?\s*(?:div|p)\b[^>]*>/gi, "\n");
+  s = s.replace(/<\s*(?:b|strong)\s*>/gi, "\u0001OB\u0002");
+  s = s.replace(/<\s*\/\s*(?:b|strong)\s*>/gi, "\u0001CB\u0002");
+  s = s.replace(/<\s*(?:i|em)\s*>/gi, "\u0001OI\u0002");
+  s = s.replace(/<\s*\/\s*(?:i|em)\s*>/gi, "\u0001CI\u0002");
+  s = s.replace(/<[^>]*>/g, "");
+  s = s.replace(/&(?!(?:amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);)/g, "&amp;");
+  s = s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  s = s.replace(/\u0001OB\u0002/g, "<b>").replace(/\u0001CB\u0002/g, "</b>");
+  s = s.replace(/\u0001OI\u0002/g, "<i>").replace(/\u0001CI\u0002/g, "</i>");
+  s = s.replace(/\n{3,}/g, "\n\n").trim();
+  if (s.length > RICH_MAX_LENGTH) {
+    s = s.slice(0, RICH_MAX_LENGTH);
+  }
+  return s;
+}
+
+function serializeRichNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeHtml(node.textContent);
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return "";
+  }
+  const tag = node.tagName.toLowerCase();
+  if (tag === "br") {
+    return "\n";
+  }
+  let inner = "";
+  node.childNodes.forEach((child) => {
+    inner += serializeRichNode(child);
+  });
+  if (tag === "b" || tag === "strong") {
+    return inner ? `<b>${inner}</b>` : "";
+  }
+  if (tag === "i" || tag === "em") {
+    return inner ? `<i>${inner}</i>` : "";
+  }
+  if (tag === "div" || tag === "p") {
+    return `${inner}\n`;
+  }
+  return inner;
+}
+
+function getRichEditorValue(editor) {
+  if (!editor) {
+    return "";
+  }
+  let out = "";
+  editor.childNodes.forEach((child) => {
+    out += serializeRichNode(child);
+  });
+  return sanitizeRichText(out);
+}
+
+function richTextToDisplayHtml(rich) {
+  return sanitizeRichText(rich).replace(/\n/g, "<br>");
+}
+
+function richTextToPlain(rich) {
+  return sanitizeRichText(rich)
+    .replace(/<\/?[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function setRichEditor(editor, rich) {
+  if (!editor) {
+    return;
+  }
+  editor.innerHTML = richTextToDisplayHtml(rich);
+}
+
+function clearRichEditor(editor) {
+  if (!editor) {
+    return;
+  }
+  editor.innerHTML = "";
+  if (document.activeElement === editor) {
+    normalizeInlineTypingMode(editor);
+    saveSelectionForEditor(editor);
+  }
 }
 
 function normalizeBoardTextSize(value) {
@@ -271,7 +708,16 @@ function normalizeBoardTextSize(value) {
     return BOARD_TEXT_DEFAULT_SIZE;
   }
 
-  return Math.round(clamp(numericValue, BOARD_TEXT_MIN_SIZE, BOARD_TEXT_MAX_SIZE) * 100) / 100;
+  return Math.round(Math.max(numericValue, BOARD_TEXT_MIN_SIZE) * 100) / 100;
+}
+
+function normalizeBoardTextDimension(value, fallback, min) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.round(Math.max(numericValue, min));
 }
 
 function applyBoardTextSizeToElement(element, size) {
@@ -280,6 +726,18 @@ function applyBoardTextSizeToElement(element, size) {
   }
 
   element.style.fontSize = `${normalizeBoardTextSize(size)}rem`;
+}
+
+function getBoardTextResizeSize(width, height, baseWidth, baseHeight, baseSize = BOARD_TEXT_DEFAULT_SIZE) {
+  const widthScale = Number(width) / Number(baseWidth);
+  const heightScale = Number(height) / Number(baseHeight);
+  const scale = Math.max(widthScale, heightScale);
+
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return normalizeBoardTextSize(baseSize);
+  }
+
+  return normalizeBoardTextSize(normalizeBoardTextSize(baseSize) * scale);
 }
 
 function getStoredSessionToken() {
@@ -354,6 +812,26 @@ function getScaledNoteBounds() {
   };
 }
 
+function getNoteBounds(note) {
+  const scale = getNoteScale();
+  const baseWidth = Number.isFinite(note?.width) ? note.width : NOTE_DEFAULT_WIDTH;
+  const baseHeight = Number.isFinite(note?.height) ? note.height : NOTE_DEFAULT_HEIGHT;
+  return {
+    width: baseWidth * scale,
+    height: baseHeight * scale,
+    baseWidth,
+    baseHeight
+  };
+}
+
+function normalizeNoteSize(value, fallback, min, max) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  return Math.round(Math.min(Math.max(numericValue, min), max));
+}
+
 function applyCanvasSize() {
   document.documentElement.style.setProperty("--canvas-width", `${canvasWidth}px`);
   document.documentElement.style.setProperty("--canvas-height", `${canvasHeight}px`);
@@ -398,7 +876,7 @@ function adjustNoteScale(direction) {
 }
 
 function openNotePreview(note) {
-  if (!notePreview) {
+  if (!notePreview || !isNoteVisibleOnBoard(note)) {
     return;
   }
 
@@ -422,11 +900,11 @@ function openNotePreview(note) {
   isPreviewEditing = false;
   clearPendingPreviewUpdateTimer();
 
-  notePreviewText.textContent = note.text;
+  notePreviewText.innerHTML = richTextToDisplayHtml(note.text);
   applyNoteFormatToElement(notePreviewText, note.format);
-  notePreviewDelegation.textContent = `Delegace: ${note.from} -> ${note.to}`;
-  notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Vyřešeno" : " | Stav: Aktivní"}`;
-  notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note));
+  notePreviewDelegation.textContent = `Autor: ${note.from} | Řešitel: ${note.to}`;
+  notePreviewDetails.textContent = buildNoteDetailsText(note);
+  notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note) || !isActiveNote(note));
   notePreviewView?.classList.remove("hidden");
   notePreviewEditForm?.classList.add("hidden");
   if (notePreviewEditStatus) {
@@ -435,7 +913,7 @@ function openNotePreview(note) {
   }
 }
 
-function closeNotePreview() {
+function closeNotePreview(immediate = false) {
   if (!notePreview) {
     return;
   }
@@ -450,9 +928,17 @@ function closeNotePreview() {
 
   notePreview.classList.remove("open");
   notePreview.setAttribute("aria-hidden", "true");
+  notePreviewView?.classList.remove("hidden");
+  notePreviewEditForm?.classList.add("hidden");
 
   if (notePreviewClosingTimer) {
     clearTimeout(notePreviewClosingTimer);
+    notePreviewClosingTimer = null;
+  }
+
+  if (immediate) {
+    notePreview.classList.add("hidden");
+    return;
   }
 
   notePreviewClosingTimer = window.setTimeout(() => {
@@ -483,34 +969,6 @@ function clearPendingPreviewUpdateTimer() {
     clearTimeout(pendingPreviewUpdateTimer);
     pendingPreviewUpdateTimer = null;
   }
-}
-
-function clearPendingHoverPreviewTimer() {
-  if (pendingHoverPreviewTimer) {
-    clearTimeout(pendingHoverPreviewTimer);
-    pendingHoverPreviewTimer = null;
-  }
-  pendingHoverPreviewNoteId = null;
-}
-
-function scheduleHoverPreview(noteId) {
-  clearPendingHoverPreviewTimer();
-  pendingHoverPreviewNoteId = noteId;
-  pendingHoverPreviewTimer = window.setTimeout(() => {
-    pendingHoverPreviewTimer = null;
-    if (pendingHoverPreviewNoteId !== noteId) {
-      return;
-    }
-
-    const currentNote = notes.find((item) => item.id === noteId);
-    if (!currentNote) {
-      clearPendingHoverPreviewTimer();
-      return;
-    }
-
-    openNotePreview(currentNote);
-    clearPendingHoverPreviewTimer();
-  }, NOTE_HOVER_PREVIEW_DELAY_MS);
 }
 
 function renderPreviewEditPalette() {
@@ -554,7 +1012,7 @@ function refreshOpenPreview() {
   }
 
   const note = getActivePreviewNote();
-  if (!note) {
+  if (!note || !isNoteVisibleOnBoard(note)) {
     closeNotePreview();
     return;
   }
@@ -564,22 +1022,25 @@ function refreshOpenPreview() {
     previewSheet.style.background = note.color;
   }
 
-  notePreviewText.textContent = note.text;
+  notePreviewText.innerHTML = richTextToDisplayHtml(note.text);
   applyNoteFormatToElement(notePreviewText, note.format);
-  notePreviewDelegation.textContent = `Delegace: ${note.from} -> ${note.to}`;
-  notePreviewDetails.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}${note.done ? " | Stav: Vyřešeno" : " | Stav: Aktivní"}`;
-  notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note));
+  notePreviewDelegation.textContent = `Autor: ${note.from} | Řešitel: ${note.to}`;
+  notePreviewDetails.textContent = buildNoteDetailsText(note);
+  notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note) || !isActiveNote(note));
 
   if (isPreviewEditing) {
-    notePreviewEditText.value = note.text;
-    notePreviewEditFrom.value = note.from;
+    setRichEditor(notePreviewEditText, note.text);
+    setAuthorFieldValue(notePreviewEditFrom, note.from);
     populatePreviewAssigneeSelect(note.to);
+    notePreviewEditIsDelegated.checked = Boolean(note?.isDelegated);
+    renderDelegatedSourceSelects();
     notePreviewEditPriority.value = ["Nizka", "Stredni", "Vysoka"].includes(note.priority)
       ? note.priority
       : "Stredni";
     notePreviewEditDeadline.value = note.deadline || "";
     previewEditSelectedColor = note.color || noteColors[0];
     setNoteFormatToolbar(notePreviewEditFormatToolbar, note.format);
+    applyToolbarFormatToEditor(notePreviewEditText, notePreviewEditFormatToolbar);
     renderPreviewEditPalette();
   }
 }
@@ -591,15 +1052,18 @@ function enterPreviewEditMode() {
   }
 
   isPreviewEditing = true;
-  notePreviewEditText.value = note.text;
-  notePreviewEditFrom.value = note.from;
+  setRichEditor(notePreviewEditText, note.text);
+  setAuthorFieldValue(notePreviewEditFrom, note.from);
   populatePreviewAssigneeSelect(note.to);
+  notePreviewEditIsDelegated.checked = Boolean(note?.isDelegated);
+  renderDelegatedSourceSelects();
   notePreviewEditPriority.value = ["Nizka", "Stredni", "Vysoka"].includes(note.priority)
     ? note.priority
     : "Stredni";
   notePreviewEditDeadline.value = note.deadline || "";
   previewEditSelectedColor = note.color || noteColors[0];
   setNoteFormatToolbar(notePreviewEditFormatToolbar, note.format);
+  applyToolbarFormatToEditor(notePreviewEditText, notePreviewEditFormatToolbar);
   renderPreviewEditPalette();
   setPreviewEditStatus("");
   notePreviewView?.classList.add("hidden");
@@ -638,7 +1102,6 @@ function closeDockPanel() {
   setCreationControlsVisibility(false);
   dockToggleNote?.classList.remove("active");
   dockToggleFilter?.classList.remove("active");
-  dockToggleBoard?.classList.remove("active");
   dockToggleActions?.classList.remove("active");
 }
 
@@ -651,7 +1114,6 @@ function openDockSection(section) {
   const activeBtn =
     (dockToggleNote?.classList.contains("active") && "note") ||
     (dockToggleFilter?.classList.contains("active") && "filter") ||
-    (dockToggleBoard?.classList.contains("active") && "board") ||
     (dockToggleActions?.classList.contains("active") && "actions");
 
   if (isAlreadyOpen && activeBtn === section) {
@@ -662,12 +1124,10 @@ function openDockSection(section) {
   toolDockPanel.classList.remove("hidden");
   dockSectionNote?.classList.toggle("hidden", section !== "note");
   dockSectionFilter?.classList.toggle("hidden", section !== "filter");
-  dockSectionBoard?.classList.toggle("hidden", section !== "board");
   dockSectionActions?.classList.toggle("hidden", section !== "actions");
 
   dockToggleNote?.classList.toggle("active", section === "note");
   dockToggleFilter?.classList.toggle("active", section === "filter");
-  dockToggleBoard?.classList.toggle("active", section === "board");
   dockToggleActions?.classList.toggle("active", section === "actions");
   setCreationControlsVisibility(section === "note");
 }
@@ -683,6 +1143,9 @@ function logoutLocally() {
   resizingBoardText = null;
   resizingBoardTextElement = null;
   activeTextResizePointerId = null;
+  resizingNote = null;
+  resizingNoteElement = null;
+  activeNoteResizePointerId = null;
   activeTextPointerId = null;
 
   meBadge.textContent = "";
@@ -693,7 +1156,7 @@ function logoutLocally() {
   loginPassword.value = "";
   loginEmail.value = "";
   loginEmailWrap?.classList.remove("hidden");
-  noteText.value = "";
+  clearRichEditor(noteText);
   sessionSaveStatus.textContent = "";
   setBoardActionStatus("");
   clearStoredSessionToken();
@@ -726,21 +1189,75 @@ function applyAuthLandingMessage() {
 }
 
 function upsertNote(next) {
-  const index = notes.findIndex((note) => note.id === next.id);
-  if (index === -1) {
-    notes.push(next);
+  const normalizedNote = normalizeIncomingNote(next);
+  if (!normalizedNote) {
     return;
   }
-  notes[index] = { ...notes[index], ...next };
+
+  const index = notes.findIndex((note) => note.id === normalizedNote.id);
+  if (index === -1) {
+    notes.push(normalizedNote);
+    return;
+  }
+  notes[index] = { ...notes[index], ...normalizedNote };
 }
 
 function upsertBoardText(next) {
-  const index = boardTexts.findIndex((item) => item.id === next.id);
-  if (index === -1) {
-    boardTexts.push(next);
+  const normalizedText = normalizeIncomingBoardText(next);
+  if (!normalizedText) {
     return;
   }
-  boardTexts[index] = { ...boardTexts[index], ...next };
+
+  const index = boardTexts.findIndex((item) => item.id === normalizedText.id);
+  if (index === -1) {
+    boardTexts.push(normalizedText);
+    return;
+  }
+  boardTexts[index] = { ...boardTexts[index], ...normalizedText };
+}
+
+function normalizeIncomingNote(next) {
+  if (!next || typeof next !== "object" || !next.id) {
+    return null;
+  }
+
+  const status = normalizeNoteStatus(next.status, Boolean(next.done));
+
+  return {
+    ...next,
+    text: sanitizeRichText(typeof next.text === "string" ? next.text : ""),
+    isDelegated: Boolean(next.isDelegated || sanitizeLinkedSourceNoteId(next.linkedSourceNoteId)),
+    linkedSourceNoteId: sanitizeLinkedSourceNoteId(next.linkedSourceNoteId),
+    from: String(next.from || ""),
+    to: String(next.to || ""),
+    priority: typeof next.priority === "string" && next.priority ? next.priority : "Stredni",
+    deadline: typeof next.deadline === "string" ? next.deadline : "",
+    color: typeof next.color === "string" && next.color ? next.color : noteColors[0],
+    x: snapToGrid(Number.isFinite(next.x) ? next.x : 0),
+    y: snapToGrid(Number.isFinite(next.y) ? next.y : 0),
+    width: normalizeNoteSize(next.width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH),
+    height: normalizeNoteSize(next.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT),
+    status,
+    done: status === "done",
+    format: normalizeNoteFormat(next.format)
+  };
+}
+
+function normalizeIncomingBoardText(next) {
+  if (!next || typeof next !== "object" || !next.id) {
+    return null;
+  }
+
+  return {
+    ...next,
+    text: typeof next.text === "string" ? next.text : "",
+    author: String(next.author || "Uživatel"),
+    x: Number.isFinite(next.x) ? next.x : 0,
+    y: Number.isFinite(next.y) ? next.y : 0,
+    width: normalizeBoardTextDimension(next.width, BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH),
+    height: normalizeBoardTextDimension(next.height, BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT),
+    size: normalizeBoardTextSize(next.size)
+  };
 }
 
 function renderColorPalette(target, colors, selected, onPick) {
@@ -812,6 +1329,14 @@ function getAssignableNames() {
   pushName(me?.name);
 
   return mergedNames;
+}
+
+function setAuthorFieldValue(field, value = "") {
+  if (!field) {
+    return;
+  }
+
+  field.value = String(value || "").trim();
 }
 
 async function loadRegisteredUsers() {
@@ -890,6 +1415,8 @@ function renderUserSelects() {
   const previousFilter = assigneeFilter.value;
   const assignableNames = getAssignableNames();
 
+  setAuthorFieldValue(fromUser, me?.name || "");
+
   toUser.innerHTML = "";
   assignableNames.forEach((name) => {
     const option = document.createElement("option");
@@ -907,6 +1434,7 @@ function renderUserSelects() {
   }
 
   if (boardInlineToUser) {
+    setAuthorFieldValue(boardInlineFromUser, me?.name || "");
     boardInlineToUser.innerHTML = "";
     assignableNames.forEach((name) => {
       const option = document.createElement("option");
@@ -941,9 +1469,34 @@ function renderUserSelects() {
   if (activePreviewNoteId && isPreviewEditing) {
     const note = getActivePreviewNote();
     if (note) {
+      setAuthorFieldValue(notePreviewEditFrom, note.from);
       populatePreviewAssigneeSelect(note.to);
     }
   }
+
+  renderDelegatedSourceSelects();
+}
+
+function syncDelegatedControls(toggle, assigneeWrap, assigneeSelect) {
+  if (!toggle || !assigneeSelect) {
+    return;
+  }
+
+  const isDelegated = Boolean(toggle.checked);
+  assigneeWrap?.classList.toggle("hidden", !isDelegated);
+
+  if (!isDelegated) {
+    const defaultAssignee = me?.name || assigneeSelect.value || "";
+    if (defaultAssignee) {
+      assigneeSelect.value = defaultAssignee;
+    }
+  }
+}
+
+function renderDelegatedSourceSelects() {
+  syncDelegatedControls(noteIsDelegated, toUserWrap, toUser);
+  syncDelegatedControls(boardInlineIsDelegated, boardInlineToUserWrap, boardInlineToUser);
+  syncDelegatedControls(notePreviewEditIsDelegated, notePreviewEditToWrap, notePreviewEditTo);
 }
 
 function renderActivity(items) {
@@ -961,42 +1514,421 @@ function setBoardActionStatus(message, isError = false) {
   boardActionStatus.classList.toggle("is-error", isError);
 }
 
-function isMyNote(note) {
-  if (!me) {
-    return false;
-  }
-  if (me.role === "admin") {
-    return true;
-  }
-  return (note.ownerId || note.ownerEmail || note.owner || note.from) === (me.email || me.name);
+function getDoneNotes() {
+  return notes.filter((note) => isArchivedNote(note));
 }
 
-function isAssignedToMe(note) {
-  if (!me) {
-    return false;
-  }
-
-  return String(note?.to || "").trim().toLowerCase() === String(me.name || "").trim().toLowerCase();
+function getArchivedNotes() {
+  return getDoneNotes();
 }
 
-function canEditNote(note) {
-  return isMyNote(note) || isAssignedToMe(note);
+function getLinkedSourceDirectionLabel(note) {
+  const source = getLinkedSourceNote(note);
+  return source ? `${source.from} -> ${source.to}` : "";
 }
 
-function canToggleNote(note) {
-  if (!me) {
-    return false;
+function buildNoteDetailsText(note) {
+  const parts = [`Priorita: ${formatPriorityLabel(note.priority)}`];
+  if (note.deadline) {
+    parts.push(`Termín: ${note.deadline}`);
+  }
+  parts.push(`Stav: ${formatNoteStatusLabel(note)}`);
+
+  const linkedSourceDirectionLabel = getLinkedSourceDirectionLabel(note);
+  if (linkedSourceDirectionLabel) {
+    parts.push(`Navazuje na: ${linkedSourceDirectionLabel}`);
   }
 
-  if (me.role === "admin") {
-    return true;
+  return parts.join(" | ");
+}
+
+function ensureNoteConnectionsOverlay() {
+  if (!boardCanvas) {
+    return null;
   }
 
-  if (isMyNote(note)) {
-    return true;
+  if (!noteConnectionsSvg || !boardCanvas.contains(noteConnectionsSvg)) {
+    noteConnectionsSvg = document.createElementNS(SVG_NS, "svg");
+    noteConnectionsSvg.classList.add("board-connections");
+
+    const defs = document.createElementNS(SVG_NS, "defs");
+    const marker = document.createElementNS(SVG_NS, "marker");
+    marker.setAttribute("id", "note-connection-arrow");
+    marker.setAttribute("markerWidth", "9");
+    marker.setAttribute("markerHeight", "9");
+    marker.setAttribute("refX", "7.5");
+    marker.setAttribute("refY", "4.5");
+    marker.setAttribute("orient", "auto-start-reverse");
+    marker.setAttribute("viewBox", "0 0 9 9");
+
+    const arrowPath = document.createElementNS(SVG_NS, "path");
+    arrowPath.setAttribute("d", "M1 1 L8 4.5 L1 8 Z");
+    arrowPath.classList.add("board-connection-arrow");
+
+    marker.append(arrowPath);
+    defs.append(marker);
+    noteConnectionsSvg.append(defs);
   }
 
-  return isAssignedToMe(note);
+  const canvasRect = boardCanvas.getBoundingClientRect();
+  const overlayWidth = Math.max(boardCanvas.clientWidth, Math.round(canvasRect.width), 1);
+  const overlayHeight = Math.max(boardCanvas.clientHeight, Math.round(canvasRect.height), 1);
+
+  noteConnectionsSvg.setAttribute("width", String(overlayWidth));
+  noteConnectionsSvg.setAttribute("height", String(overlayHeight));
+  noteConnectionsSvg.setAttribute("viewBox", `0 0 ${overlayWidth} ${overlayHeight}`);
+  boardCanvas.append(noteConnectionsSvg);
+  return noteConnectionsSvg;
+}
+
+function getRenderedNoteRect(note) {
+  if (!boardCanvas || !note?.id) {
+    return null;
+  }
+
+  const element = boardCanvas.querySelector(`.sticky[data-id="${note.id}"]`);
+  if (!(element instanceof HTMLElement)) {
+    return null;
+  }
+
+  const canvasRect = boardCanvas.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  return {
+    x: elementRect.left - canvasRect.left,
+    y: elementRect.top - canvasRect.top,
+    width: elementRect.width,
+    height: elementRect.height
+  };
+}
+
+function getNoteConnectionCenter(note) {
+  const bounds = getRenderedNoteRect(note) || getNoteBounds(note);
+  const originX = Number.isFinite(bounds.x) ? bounds.x : note.x;
+  const originY = Number.isFinite(bounds.y) ? bounds.y : note.y;
+  return {
+    x: originX + bounds.width / 2,
+    y: originY + bounds.height * NOTE_CONNECTION_VERTICAL_CENTER_RATIO
+  };
+}
+
+function getNoteConnectionAnchor(note, towardX, towardY) {
+  const bounds = getRenderedNoteRect(note) || getNoteBounds(note);
+  const originX = Number.isFinite(bounds.x) ? bounds.x : note.x;
+  const originY = Number.isFinite(bounds.y) ? bounds.y : note.y;
+  const center = getNoteConnectionCenter(note);
+  const deltaX = towardX - center.x;
+  const deltaY = towardY - center.y;
+
+  if (deltaX === 0 && deltaY === 0) {
+    return center;
+  }
+
+  const left = originX;
+  const right = originX + bounds.width;
+  const top = originY;
+  const bottom = originY + bounds.height;
+
+  const horizontalDistance = deltaX >= 0 ? right - center.x : center.x - left;
+  const verticalDistance = deltaY >= 0 ? bottom - center.y : center.y - top;
+
+  const horizontalScale = Math.abs(deltaX) > 0.001 ? horizontalDistance / Math.abs(deltaX) : Number.POSITIVE_INFINITY;
+  const verticalScale = Math.abs(deltaY) > 0.001 ? verticalDistance / Math.abs(deltaY) : Number.POSITIVE_INFINITY;
+  const scale = Math.min(horizontalScale, verticalScale);
+
+  return {
+    x: center.x + deltaX * scale,
+    y: center.y + deltaY * scale
+  };
+}
+
+function renderNoteConnections() {
+  const overlay = ensureNoteConnectionsOverlay();
+  if (!overlay) {
+    return;
+  }
+
+  overlay.querySelectorAll(".board-connection").forEach((element) => {
+    element.remove();
+  });
+
+  const visibleNotes = getVisibleNotes();
+  if (visibleNotes.length === 0) {
+    return;
+  }
+
+  const visibleNotesById = new Map(visibleNotes.map((note) => [note.id, note]));
+
+  visibleNotes.forEach((note) => {
+    const linkedSourceNoteId = sanitizeLinkedSourceNoteId(note.linkedSourceNoteId);
+    if (!linkedSourceNoteId) {
+      return;
+    }
+
+    const sourceNote = visibleNotesById.get(linkedSourceNoteId);
+    if (!sourceNote || sourceNote.id === note.id) {
+      return;
+    }
+
+    const sourceCenter = getNoteConnectionCenter(sourceNote);
+    const targetCenter = getNoteConnectionCenter(note);
+    const start = getNoteConnectionAnchor(sourceNote, targetCenter.x, targetCenter.y);
+    const end = getNoteConnectionAnchor(note, sourceCenter.x, sourceCenter.y);
+
+    const connectionGroup = document.createElementNS(SVG_NS, "g");
+    connectionGroup.classList.add("board-connection");
+
+    const connectionLine = document.createElementNS(SVG_NS, "line");
+    connectionLine.classList.add("board-connection-line");
+    connectionLine.setAttribute("x1", String(start.x));
+    connectionLine.setAttribute("y1", String(start.y));
+    connectionLine.setAttribute("x2", String(end.x));
+    connectionLine.setAttribute("y2", String(end.y));
+    connectionLine.setAttribute("marker-end", "url(#note-connection-arrow)");
+    connectionGroup.append(connectionLine);
+
+    overlay.append(connectionGroup);
+  });
+}
+
+function getNoteSummary(note, maxLength = 80) {
+  const plain = richTextToPlain(note?.text || "").replace(/\s+/g, " ").trim();
+  if (!plain) {
+    return "(bez textu)";
+  }
+  if (plain.length <= maxLength) {
+    return plain;
+  }
+  return `${plain.slice(0, maxLength - 1)}...`;
+}
+
+function renderArchiveIndicator() {
+  if (!archiveIndicator || !archiveIndicatorTotal || !archiveIndicatorDone) {
+    return;
+  }
+
+  const doneCount = getDoneNotes().length;
+
+  archiveIndicator.classList.toggle("hidden", doneCount === 0);
+  archiveIndicatorTotal.textContent = String(doneCount);
+  archiveIndicatorDone.textContent = `Vyřešené ${doneCount}`;
+}
+
+function createArchiveEmptyState(message) {
+  const empty = document.createElement("div");
+  empty.className = "note-archive-empty";
+  empty.textContent = message;
+  return empty;
+}
+
+function requestNoteRestore(note) {
+  if (!note?.id) {
+    return;
+  }
+
+  socket.emit("note:toggle", { id: note.id }, (response) => {
+    if (!response?.ok) {
+      setBoardActionStatus(response?.message || "Obnovení lístku se nepodařilo.", true);
+      return;
+    }
+    setBoardActionStatus("Lístek byl vrácen zpět na plochu.");
+  });
+}
+
+function createArchiveNoteCard(note, status) {
+  const card = document.createElement("article");
+  card.className = `note-archive-card note-archive-card-${status}`;
+
+  const top = document.createElement("div");
+  top.className = "note-archive-card-top";
+
+  const meta = document.createElement("div");
+  meta.className = "note-archive-meta";
+  const delegation = document.createElement("div");
+  delegation.textContent = `Autor: ${note.from} | Řešitel: ${note.to}`;
+  const details = document.createElement("div");
+  details.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}`;
+  meta.append(delegation, details);
+
+  const state = document.createElement("span");
+  state.className = `note-archive-state note-archive-state-${status}`;
+  state.textContent = formatNoteStatusLabel(note);
+  top.append(meta, state);
+
+  const text = document.createElement("p");
+  text.className = "note-archive-text";
+  text.innerHTML = richTextToDisplayHtml(note.text);
+  applyNoteFormatToElement(text, note.format);
+
+  const actions = document.createElement("div");
+  actions.className = "note-archive-actions";
+  const restoreBtn = document.createElement("button");
+  restoreBtn.type = "button";
+  restoreBtn.className = "secondary-btn";
+  restoreBtn.textContent = "Vrátit na plochu";
+  restoreBtn.addEventListener("click", () => {
+    requestNoteRestore(note);
+  });
+  actions.append(restoreBtn);
+
+  card.append(top, text, actions);
+  return card;
+}
+
+function renderArchiveList(target, items, status, emptyMessage) {
+  if (!target) {
+    return;
+  }
+
+  target.innerHTML = "";
+  if (items.length === 0) {
+    target.append(createArchiveEmptyState(emptyMessage));
+    return;
+  }
+
+  items
+    .slice()
+    .reverse()
+    .forEach((note) => {
+      target.append(createArchiveNoteCard(note, status));
+    });
+}
+
+function renderNoteArchive() {
+  if (!noteArchiveDoneList) {
+    return;
+  }
+
+  const doneNotes = getDoneNotes();
+
+  if (noteArchiveSummary) {
+    noteArchiveSummary.textContent = `Mimo plochu je ${doneNotes.length} vyřešených lístků.`;
+  }
+  if (noteArchiveDoneCount) {
+    noteArchiveDoneCount.textContent = String(doneNotes.length);
+  }
+
+  renderArchiveList(noteArchiveDoneList, doneNotes, "done", "Zatím tu nejsou žádné vyřešené lístky.");
+}
+
+function refreshArchivedNotesUi() {
+  renderArchiveIndicator();
+  if (noteArchive && !noteArchive.classList.contains("hidden")) {
+    renderNoteArchive();
+  }
+}
+
+function openNoteArchive() {
+  if (!noteArchive) {
+    return;
+  }
+
+  if (noteArchiveClosingTimer) {
+    clearTimeout(noteArchiveClosingTimer);
+    noteArchiveClosingTimer = null;
+  }
+
+  renderNoteArchive();
+  noteArchive.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    noteArchive.classList.add("open");
+  });
+  noteArchive.setAttribute("aria-hidden", "false");
+}
+
+function closeNoteArchive(immediate = false) {
+  if (!noteArchive) {
+    return;
+  }
+
+  noteArchive.classList.remove("open");
+  noteArchive.setAttribute("aria-hidden", "true");
+
+  if (noteArchiveClosingTimer) {
+    clearTimeout(noteArchiveClosingTimer);
+    noteArchiveClosingTimer = null;
+  }
+
+  if (immediate) {
+    noteArchive.classList.add("hidden");
+    return;
+  }
+
+  noteArchiveClosingTimer = window.setTimeout(() => {
+    noteArchive.classList.add("hidden");
+    noteArchiveClosingTimer = null;
+  }, PREVIEW_ANIMATION_MS);
+}
+
+function openConfirmModal({ title, message, confirmLabel, confirmTone = "default", onConfirm }) {
+  if (!confirmModal || !confirmModalTitle || !confirmModalMessage || !confirmModalConfirm) {
+    onConfirm?.();
+    return;
+  }
+
+  if (confirmModalClosingTimer) {
+    clearTimeout(confirmModalClosingTimer);
+    confirmModalClosingTimer = null;
+  }
+
+  pendingConfirmAction = typeof onConfirm === "function" ? onConfirm : null;
+  confirmModalTitle.textContent = title || "Potvrzení";
+  confirmModalMessage.textContent = message || "";
+  confirmModalConfirm.textContent = confirmLabel || "Potvrdit";
+  confirmModalConfirm.className = confirmTone === "danger" ? "danger-btn" : "secondary-btn";
+  confirmModal.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    confirmModal.classList.add("open");
+  });
+  confirmModal.setAttribute("aria-hidden", "false");
+}
+
+function closeConfirmModal(immediate = false) {
+  if (!confirmModal) {
+    return;
+  }
+
+  confirmModal.classList.remove("open");
+  confirmModal.setAttribute("aria-hidden", "true");
+
+  if (confirmModalClosingTimer) {
+    clearTimeout(confirmModalClosingTimer);
+    confirmModalClosingTimer = null;
+  }
+
+  const finish = () => {
+    confirmModal.classList.add("hidden");
+    pendingConfirmAction = null;
+    confirmModalClosingTimer = null;
+  };
+
+  if (immediate) {
+    finish();
+    return;
+  }
+
+  confirmModalClosingTimer = window.setTimeout(finish, PREVIEW_ANIMATION_MS);
+}
+
+function runPendingConfirmAction() {
+  const action = pendingConfirmAction;
+  closeConfirmModal(true);
+  action?.();
+}
+
+function isMyNote(_note) {
+  return true;
+}
+
+function isAssignedToMe(_note) {
+  return true;
+}
+
+function canEditNote(_note) {
+  return true;
+}
+
+function canToggleNote(_note) {
+  return true;
 }
 
 function canMoveNote(_note) {
@@ -1004,7 +1936,7 @@ function canMoveNote(_note) {
 }
 
 function getSelectedMovableNotes() {
-  return notes.filter((note) => selectedNoteIds.has(note.id) && !note.done && canMoveNote(note));
+  return notes.filter((note) => selectedNoteIds.has(note.id) && isActiveNote(note) && canMoveNote(note));
 }
 
 function clearSelection() {
@@ -1020,40 +1952,46 @@ function deleteSelectedNotes() {
     return;
   }
 
-  const ids = Array.from(selectedNoteIds);
+  const ids = Array.from(selectedNoteIds).filter((id) => {
+    const note = notes.find((item) => item.id === id);
+    return note && isActiveNote(note);
+  });
   if (ids.length === 0) {
-    setBoardActionStatus("Nejdřív označ lístky pro hromadné smazání.");
+    setBoardActionStatus("Nejdřív označ aktivní lístky ke smazání.");
     return;
   }
 
-  const ok = window.confirm(`Opravdu smazat vybrané lístky (${ids.length})?`);
-  if (!ok) {
-    return;
-  }
+  openConfirmModal({
+    title: "Smazat vybrané lístky?",
+    message: `Vybrané lístky (${ids.length}) se trvale smažou z plochy.`,
+    confirmLabel: "Smazat vybrané",
+    confirmTone: "danger",
+    onConfirm: () => {
+      socket.emit("note:deleteMany", { ids }, (response) => {
+        if (!response?.ok) {
+          setBoardActionStatus(response?.message || "Smazání vybraných lístků se nepodařilo.", true);
+          return;
+        }
 
-  socket.emit("note:deleteMany", { ids }, (response) => {
-    if (!response?.ok) {
-      setBoardActionStatus(response?.message || "Hromadné smazání vybraných lístků se nepodařilo.", true);
-      return;
+        const removedCount = Number(response?.removedCount || 0);
+        const deniedCount = Number(response?.deniedCount || 0);
+        if (removedCount === 0) {
+          setBoardActionStatus(
+            deniedCount > 0
+              ? "Vybrané lístky nemůžeš smazat."
+              : "Vybrané lístky už nejsou aktivní.",
+            deniedCount > 0
+          );
+          return;
+        }
+
+        setBoardActionStatus(
+          deniedCount > 0
+            ? `Smazáno: ${removedCount}. Přeskočeno: ${deniedCount}.`
+            : `Smazáno: ${removedCount}.`
+        );
+      });
     }
-
-    const removedCount = Number(response?.removedCount || 0);
-    const deniedCount = Number(response?.deniedCount || 0);
-    if (removedCount === 0) {
-      setBoardActionStatus(
-        deniedCount > 0
-          ? "Vybrané lístky nemůžeš smazat (nejsi autor nebo admin)."
-          : "Vybrané lístky už neexistují.",
-        deniedCount > 0
-      );
-      return;
-    }
-
-    setBoardActionStatus(
-      deniedCount > 0
-        ? `Smazáno vybraných lístků: ${removedCount}. Přeskočeno bez oprávnění: ${deniedCount}.`
-        : `Smazáno vybraných lístků: ${removedCount}.`
-    );
   });
 }
 
@@ -1110,18 +2048,12 @@ function markSelectedNotesDone() {
   });
 }
 
-function isMyBoardText(item) {
-  if (!me) {
-    return false;
-  }
-  if (me.role === "admin") {
-    return true;
-  }
-  return (item.ownerId || item.ownerEmail || item.owner || item.author) === (me.email || me.name);
+function isMyBoardText(_item) {
+  return true;
 }
 
-function canEditBoardText(item) {
-  return isMyBoardText(item);
+function canEditBoardText(_item) {
+  return true;
 }
 
 function setActiveBoardText(id) {
@@ -1152,6 +2084,9 @@ function editBoardText(item, element) {
   }
 
   const textBody = element.querySelector(".board-text-body");
+  const previousHeight = element.style.height;
+  const previousOverflow = element.style.overflow;
+  const previousMinHeight = element.style.minHeight;
   const editor = document.createElement("form");
   editor.className = "board-text-editor";
 
@@ -1179,11 +2114,19 @@ function editBoardText(item, element) {
 
   actions.append(saveBtn, deleteBtn, cancelBtn);
   editor.append(textarea, actions);
+  element.classList.add("editing");
+  element.style.minHeight = previousHeight || `${BOARD_TEXT_HEIGHT}px`;
+  element.style.height = "auto";
+  element.style.overflow = "visible";
   textBody?.classList.add("hidden");
   element.append(editor);
 
   const closeEditor = () => {
     editor.remove();
+    element.classList.remove("editing");
+    element.style.height = previousHeight;
+    element.style.overflow = previousOverflow;
+    element.style.minHeight = previousMinHeight;
     textBody?.classList.remove("hidden");
   };
 
@@ -1227,22 +2170,40 @@ function editBoardText(item, element) {
   textarea.select();
 }
 
-function emitBoardTextResize(item, size, ack) {
-  socket.emit("text:resize", { id: item.id, size }, ack);
+function emitBoardTextResize(item, width, height, ack) {
+  socket.emit("text:resize", { id: item.id, width, height, size: item.size }, ack);
+}
+
+function emitNoteResize(note, width, height, ack) {
+  socket.emit("note:resize", { id: note.id, width, height }, ack);
+}
+
+function startNoteResize(note, element, event) {
+  resizingNote = note;
+  resizingNoteElement = element;
+  activeNoteResizePointerId = event.pointerId;
+  noteResizeStart = {
+    x: event.clientX,
+    y: event.clientY,
+    width: Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH,
+    height: Number.isFinite(note.height) ? note.height : NOTE_DEFAULT_HEIGHT
+  };
+  lastNoteResizeEmitAt = 0;
+  element.classList.add("resizing");
+  element.setPointerCapture(event.pointerId);
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function startBoardTextResize(item, element, event) {
-  if (!canEditBoardText(item)) {
-    setBoardActionStatus("Velikost tohoto textu může změnit jen jeho autor nebo admin.", true);
-    return;
-  }
-
   resizingBoardText = item;
   resizingBoardTextElement = element;
   activeTextResizePointerId = event.pointerId;
   textResizeStart = {
     x: event.clientX,
     y: event.clientY,
+    width: Number.isFinite(item.width) ? item.width : BOARD_TEXT_WIDTH,
+    height: Number.isFinite(item.height) ? item.height : BOARD_TEXT_HEIGHT,
     size: normalizeBoardTextSize(item.size)
   };
   lastTextResizeEmitAt = 0;
@@ -1269,8 +2230,13 @@ async function pasteTextToTextarea(targetTextarea, successMessage) {
       return;
     }
 
-    targetTextarea.value = clipboardText;
+    if (targetTextarea.isContentEditable) {
+      targetTextarea.textContent = clipboardText;
+    } else {
+      targetTextarea.value = clipboardText;
+    }
     targetTextarea.focus();
+    updateFormatButtonsState(targetTextarea);
     setBoardActionStatus(successMessage || "Text byl vložen do lístku.");
   } catch {
     setBoardActionStatus("Nepodařilo se načíst text ze schránky.", true);
@@ -1283,6 +2249,25 @@ async function pasteTextToNoteInput() {
 
 function insertTextAtCursor(targetTextarea, text) {
   if (!targetTextarea || !text) {
+    return;
+  }
+
+  if (targetTextarea.isContentEditable) {
+    targetTextarea.focus();
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && targetTextarea.contains(selection.anchorNode)) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const node = document.createTextNode(text);
+      range.insertNode(node);
+      range.setStartAfter(node);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      targetTextarea.append(document.createTextNode(text));
+    }
+    updateFormatButtonsState(targetTextarea);
     return;
   }
 
@@ -1309,6 +2294,51 @@ function renderEmojiPalettes() {
       paletteEl.append(button);
     });
   });
+
+  document.querySelectorAll(".emoji-toggle-btn").forEach((toggleBtn) => {
+    toggleBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const wrap = toggleBtn.closest(".emoji-picker-wrap");
+      const palette = wrap?.querySelector(".emoji-palette");
+      if (!palette) {
+        return;
+      }
+      const isOpen = !palette.hidden;
+      document.querySelectorAll(".emoji-palette").forEach((p) => {
+        p.hidden = true;
+        p.style.top = "";
+        p.style.left = "";
+        p.style.transform = "";
+        p.closest(".emoji-picker-wrap")?.querySelector(".emoji-toggle-btn")?.setAttribute("aria-expanded", "false");
+      });
+      if (!isOpen) {
+        palette.hidden = false;
+        const rect = toggleBtn.getBoundingClientRect();
+        const panelWidth = palette.offsetWidth || 334;
+        const panelHeight = palette.offsetHeight || 220;
+        let left = rect.left;
+        if (left + panelWidth > window.innerWidth - 8) {
+          left = Math.max(8, rect.right - panelWidth);
+        }
+        if (left < 8) {
+          left = 8;
+        }
+        const spaceAbove = rect.top - 8;
+        const spaceBelow = window.innerHeight - rect.bottom - 8;
+        if (spaceAbove >= panelHeight || spaceAbove > spaceBelow) {
+          const top = Math.max(8, rect.top - panelHeight - 6);
+          palette.style.top = `${top}px`;
+          palette.style.transform = "";
+        } else {
+          const top = Math.min(window.innerHeight - panelHeight - 8, rect.bottom + 6);
+          palette.style.top = `${Math.max(8, top)}px`;
+          palette.style.transform = "";
+        }
+        palette.style.left = `${left}px`;
+        toggleBtn.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
 }
 
 function getEmojiTargetTextarea(button) {
@@ -1331,9 +2361,131 @@ function getEmojiTargetTextarea(button) {
   return null;
 }
 
+function updateFormatButtonsState(editor) {
+  const toolbar = getEditorToolbar(editor);
+  if (!editor || !toolbar) {
+    return;
+  }
+
+  setNoteFormatToolbar(toolbar, getEditorFormatState(editor));
+  const pendingState = getPendingInlineFormatState(editor);
+
+  ["bold", "italic"].forEach((action) => {
+    const button = toolbar.querySelector(`[data-format-action="${action}"]`);
+    if (!button) {
+      return;
+    }
+    const selection = window.getSelection?.();
+    const anchorNode = selection?.anchorNode || null;
+    const shouldUseQueryCommandState = isSelectionInsideEditor(editor) && anchorNode && anchorNode !== editor;
+    let active = false;
+    try {
+      active = shouldUseQueryCommandState ? document.queryCommandState(action) : false;
+    } catch {
+      active = false;
+    }
+
+    if (!active) {
+      active = action === "bold"
+        ? hasInlineFormatInSelection(editor, ["b", "strong"])
+        : hasInlineFormatInSelection(editor, ["i", "em"]);
+    }
+
+    if (!active && pendingState) {
+      active = Boolean(pendingState[action]);
+    }
+
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function clearFormatButtonsState(editor) {
+  const toolbar = getEditorToolbar(editor);
+  if (!toolbar) {
+    return;
+  }
+
+  setNoteFormatToolbar(toolbar, getEditorFormatState(editor));
+  toolbar.querySelectorAll("[data-format-action]").forEach((button) => {
+    button.classList.remove("active");
+    button.setAttribute("aria-pressed", "false");
+  });
+}
+
+function applyToolbarFormatToEditor(editor, toolbar) {
+  if (!editor || !toolbar) {
+    return;
+  }
+  applyNoteFormatToElement(editor, getNoteFormatFromToolbar(toolbar));
+  updateFormatButtonsState(editor);
+}
+
+[noteText, boardInlineText, notePreviewEditText].forEach((editor) => {
+  if (!editor) {
+    return;
+  }
+  ["keyup", "mouseup", "focus"].forEach((eventName) => {
+    editor.addEventListener(eventName, () => {
+      if (eventName === "keyup" || eventName === "mouseup" || eventName === "focus") {
+        clearPendingInlineFormatSelection(editor);
+      }
+      if (eventName === "focus") {
+        normalizeInlineTypingMode(editor);
+      }
+      saveSelectionForEditor(editor);
+      updateFormatButtonsState(editor);
+    });
+  });
+  editor.addEventListener("input", () => {
+    clearPendingInlineFormatSelection(editor);
+    saveSelectionForEditor(editor);
+    updateFormatButtonsState(editor);
+  });
+  editor.addEventListener("blur", () => {
+    clearPendingInlineFormatSelection(editor);
+    clearFormatButtonsState(editor);
+  });
+});
+
+document.addEventListener("selectionchange", () => {
+  const editor = getSelectionEditor();
+  if (!editor) {
+    clearPendingInlineFormatSelection();
+    return;
+  }
+
+  const selection = window.getSelection?.();
+  if (selection?.rangeCount > 0 && !selection.getRangeAt(0).collapsed) {
+    clearPendingInlineFormatSelection(editor);
+  }
+
+  saveSelectionForEditor(editor);
+  updateFormatButtonsState(editor);
+});
+
+document.addEventListener("pointerdown", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const formatButton = target.closest(".format-btn");
+  if (!(formatButton instanceof HTMLElement)) {
+    return;
+  }
+
+  const editor = getEmojiTargetTextarea(formatButton);
+  if (editor?.isContentEditable) {
+    saveSelectionForEditor(editor);
+  }
+
+  event.preventDefault();
+});
+
 function getVisibleNotes() {
   const filter = assigneeFilter.value || "Vsechny";
-  return notes.filter((note) => filter === "Vsechny" || note.to === filter);
+  return notes.filter((note) => isNoteVisibleOnBoard(note) && (filter === "Vsechny" || note.to === filter));
 }
 
 function openBoardQuickCreateAt(clientX, clientY) {
@@ -1387,7 +2539,7 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
   boardInlineComposer.classList.remove("hidden");
   boardInlineComposer.dataset.mode = boardInlineCreateMode;
   setCreationControlsVisibility(true);
-  boardInlineText.value = "";
+  clearRichEditor(boardInlineText);
   if (boardInlineTitle) {
     boardInlineTitle.textContent = boardInlineCreateMode === "note" ? NOTE_FORM_TITLE : BOARD_TEXT_TITLE;
   }
@@ -1395,13 +2547,13 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
     boardInlineControlTitle.textContent =
       boardInlineCreateMode === "note" ? NOTE_FORM_CONTROL_TITLE : BOARD_TEXT_CONTROL_TITLE;
   }
-  boardInlineText.placeholder =
+  boardInlineText.dataset.placeholder =
     boardInlineCreateMode === "note" ? NOTE_FORM_TEXT_PLACEHOLDER : BOARD_TEXT_PLACEHOLDER;
   if (boardInlineNoteFields) {
     boardInlineNoteFields.classList.toggle("hidden", boardInlineCreateMode !== "note");
   }
   if (boardInlineFromUser) {
-    boardInlineFromUser.value = me?.name || "";
+    setAuthorFieldValue(boardInlineFromUser, me?.name || "");
   }
   if (boardInlineToUser && boardInlineCreateMode === "note") {
     const fallbackTo = toUser.value || me?.name || boardInlineToUser.value;
@@ -1415,13 +2567,37 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
   if (boardInlineDeadline && boardInlineCreateMode === "note") {
     boardInlineDeadline.value = deadline.value || "";
   }
+  if (boardInlineIsDelegated) {
+    boardInlineIsDelegated.checked = false;
+  }
+  renderDelegatedSourceSelects();
   boardInlineSelectedColor = selectedNoteColor;
   resetNoteFormatToolbar(boardInlineFormatToolbar);
+  applyToolbarFormatToEditor(boardInlineText, boardInlineFormatToolbar);
   renderBoardInlinePalette();
   if (boardInlineSubmit) {
     boardInlineSubmit.textContent = boardInlineCreateMode === "note" ? "Přidat lístek" : "Přidat text";
   }
   boardInlineText.focus();
+}
+
+function openBoardInlineComposerAtViewportCenter(mode = "text") {
+  if (!me) {
+    setBoardActionStatus("Nejdříve se přihlas.", true);
+    return;
+  }
+
+  if (!board) {
+    return;
+  }
+
+  closeNotePreview()
+  closeBoardQuickCreate();
+  openBoardInlineComposerAtPosition(
+    board.scrollLeft + (board.clientWidth / 2),
+    board.scrollTop + (board.clientHeight / 2),
+    mode
+  );
 }
 
 function closeBoardInlineComposer() {
@@ -1431,8 +2607,11 @@ function closeBoardInlineComposer() {
 
   boardInlineComposer.classList.add("hidden");
   boardInlineComposer.dataset.mode = "";
-  boardInlineText.value = "";
+  clearRichEditor(boardInlineText);
   resetNoteFormatToolbar(boardInlineFormatToolbar);
+  if (boardInlineIsDelegated) {
+    boardInlineIsDelegated.checked = false;
+  }
   if (boardInlineDeadline) {
     boardInlineDeadline.value = "";
   }
@@ -1461,7 +2640,7 @@ function updateDonePositionHints() {
   boardArrowUp?.classList.toggle("hidden", !showUpNav);
   boardArrowDown?.classList.toggle("hidden", !showDownNav);
 
-  const doneNotes = notes.filter((note) => note.done);
+  const doneNotes = notes.filter((note) => getNoteStatus(note) === "done");
   if (doneNotes.length === 0) {
     donePositionText.classList.add("hidden");
     return;
@@ -1469,11 +2648,11 @@ function updateDonePositionHints() {
 
   donePositionText.classList.remove("hidden");
 
-  const bounds = getScaledNoteBounds();
+  const doneBounds = doneNotes.map((note) => getNoteBounds(note));
   const doneMinX = Math.min(...doneNotes.map((note) => note.x));
-  const doneMaxX = Math.max(...doneNotes.map((note) => note.x + bounds.width));
+  const doneMaxX = Math.max(...doneNotes.map((note, index) => note.x + doneBounds[index].width));
   const doneMinY = Math.min(...doneNotes.map((note) => note.y));
-  const doneMaxY = Math.max(...doneNotes.map((note) => note.y + bounds.height));
+  const doneMaxY = Math.max(...doneNotes.map((note, index) => note.y + doneBounds[index].height));
   const viewLeft = board.scrollLeft;
   const viewRight = board.scrollLeft + board.clientWidth;
   const viewTop = board.scrollTop;
@@ -1510,16 +2689,16 @@ function navigateToDoneNotes() {
     return;
   }
 
-  const doneNotes = notes.filter((note) => note.done);
+  const doneNotes = notes.filter((note) => getNoteStatus(note) === "done");
   if (doneNotes.length === 0) {
     return;
   }
 
-  const bounds = getScaledNoteBounds();
+  const doneBounds = doneNotes.map((note) => getNoteBounds(note));
   const doneMinX = Math.min(...doneNotes.map((note) => note.x));
-  const doneMaxX = Math.max(...doneNotes.map((note) => note.x + bounds.width));
+  const doneMaxX = Math.max(...doneNotes.map((note, index) => note.x + doneBounds[index].width));
   const doneMinY = Math.min(...doneNotes.map((note) => note.y));
-  const doneMaxY = Math.max(...doneNotes.map((note) => note.y + bounds.height));
+  const doneMaxY = Math.max(...doneNotes.map((note, index) => note.y + doneBounds[index].height));
 
   const targetLeft = Math.max(0, doneMinX - Math.max(40, Math.round((board.clientWidth - (doneMaxX - doneMinX)) / 2)));
   const targetTop = Math.max(0, doneMinY - Math.max(40, Math.round((board.clientHeight - (doneMaxY - doneMinY)) / 2)));
@@ -1537,8 +2716,9 @@ function submitBoardInlineComposer() {
     return;
   }
 
-  const text = boardInlineText.value.trim();
-  if (!text) {
+  const richText = getRichEditorValue(boardInlineText);
+  const plainText = richTextToPlain(richText);
+  if (!plainText) {
     setBoardActionStatus("Doplň text na plochu.", true);
     return;
   }
@@ -1551,9 +2731,9 @@ function submitBoardInlineComposer() {
     const priorityValue = boardInlinePriority?.value || priority.value || "Stredni";
     const deadlineValue = boardInlineDeadline?.value || "";
     socket.emit("note:create", {
-      text,
-      from: me.name,
+      text: richText,
       to: toValue,
+      isDelegated: Boolean(boardInlineIsDelegated?.checked),
       priority: priorityValue,
       deadline: deadlineValue,
       color: boardInlineSelectedColor,
@@ -1576,7 +2756,7 @@ function submitBoardInlineComposer() {
     renderNotePalette();
   } else {
     socket.emit("text:create", {
-      text,
+      text: plainText,
       author: me.name,
       x: nextX,
       y: nextY
@@ -1594,11 +2774,17 @@ function createBoardTextElement(item) {
   textEl.dataset.id = item.id;
   textEl.style.left = `${item.x}px`;
   textEl.style.top = `${item.y}px`;
+  textEl.style.width = `${Number.isFinite(item.width) ? item.width : BOARD_TEXT_WIDTH}px`;
+  textEl.style.maxWidth = `${Number.isFinite(item.width) ? item.width : BOARD_TEXT_WIDTH}px`;
+  textEl.style.height = `${Number.isFinite(item.height) ? item.height : BOARD_TEXT_HEIGHT}px`;
   textEl.title = `${item.author || "Uživatel"}: ${item.text}`;
 
   const textBody = document.createElement("span");
   textBody.className = "board-text-body";
-  textBody.textContent = item.text;
+
+  const textContent = document.createElement("span");
+  textContent.className = "board-text-content";
+  textContent.textContent = item.text;
 
   const resizeHandle = document.createElement("button");
   resizeHandle.type = "button";
@@ -1616,7 +2802,8 @@ function createBoardTextElement(item) {
     startBoardTextResize(item, textEl, event);
   });
 
-  textEl.append(textBody, resizeHandle);
+  textBody.append(textContent, resizeHandle);
+  textEl.append(textBody);
 
   textEl.addEventListener("dblclick", (event) => {
     if (event.target instanceof HTMLElement && event.target.closest("button")) {
@@ -1630,7 +2817,7 @@ function createBoardTextElement(item) {
   });
 
   textEl.addEventListener("pointerdown", (event) => {
-    if (event.target instanceof HTMLElement && event.target.closest("button, textarea, .board-text-editor")) {
+    if (event.target instanceof HTMLElement && event.target.closest(".board-text-resize, .note-resize, button, textarea, .board-text-editor")) {
       return;
     }
 
@@ -1647,6 +2834,7 @@ function createBoardTextElement(item) {
     textDragOffset.x = event.clientX - boardRect.left - item.x + board.scrollLeft;
     textDragOffset.y = event.clientY - boardRect.top - item.y + board.scrollTop;
 
+    boardCanvas.append(textEl);
     textEl.style.zIndex = "18";
     textEl.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -1657,9 +2845,9 @@ function createBoardTextElement(item) {
 
 function getClientDoneLanePosition(currentNoteId) {
   const doneWithoutCurrent = notes
-    .filter((note) => note.done && note.id !== currentNoteId)
+    .filter((note) => getNoteStatus(note) === "done" && note.id !== currentNoteId)
     .sort((a, b) => a.y - b.y || a.x - b.x);
-  const activeNotes = notes.filter((note) => !note.done);
+  const activeNotes = notes.filter((note) => isActiveNote(note));
 
   const index = doneWithoutCurrent.length;
   const ring = Math.floor(index / CLIENT_DONE_OVAL_POINTS_PER_RING);
@@ -1668,7 +2856,10 @@ function getClientDoneLanePosition(currentNoteId) {
   const radiusX = CLIENT_DONE_OVAL_RADIUS_X + ring * CLIENT_DONE_OVAL_RING_STEP_X;
   const radiusY = CLIENT_DONE_OVAL_RADIUS_Y + ring * CLIENT_DONE_OVAL_RING_STEP_Y;
   const activeRightEdge =
-    activeNotes.length > 0 ? Math.max(...activeNotes.map((note) => note.x + NOTE_BASE_WIDTH * getNoteScale())) : 0;
+    activeNotes.length > 0 ? Math.max(...activeNotes.map((note) => {
+      const bounds = getNoteBounds(note);
+      return note.x + bounds.width;
+    })) : 0;
   const minLeftEdgeForDone = activeRightEdge + CLIENT_DONE_ACTIVE_GAP_PX;
   const doneCenterX = Math.max(CLIENT_DONE_OVAL_BASE_CENTER_X, minLeftEdgeForDone + radiusX);
 
@@ -1679,23 +2870,25 @@ function getClientDoneLanePosition(currentNoteId) {
 }
 
 function getAlignmentItems(kind, currentId) {
-  const noteBounds = getScaledNoteBounds();
-  const visibleNotes = getVisibleNotes().map((note) => ({
-    id: note.id,
-    kind: "note",
-    x: note.x,
-    y: note.y,
-    width: noteBounds.width,
-    height: noteBounds.height
-  }));
+  const visibleNotes = getVisibleNotes().map((note) => {
+    const bounds = getNoteBounds(note);
+    return {
+      id: note.id,
+      kind: "note",
+      x: note.x,
+      y: note.y,
+      width: bounds.width,
+      height: bounds.height
+    };
+  });
 
   const textItems = boardTexts.map((item) => ({
     id: item.id,
     kind: "text",
     x: item.x,
     y: item.y,
-    width: BOARD_TEXT_WIDTH,
-    height: BOARD_TEXT_HEIGHT
+    width: Number.isFinite(item.width) ? item.width : BOARD_TEXT_WIDTH,
+    height: Number.isFinite(item.height) ? item.height : BOARD_TEXT_HEIGHT
   }));
 
   return [...visibleNotes, ...textItems].filter((item) => !(item.kind === kind && item.id === currentId));
@@ -1725,50 +2918,60 @@ function updateSelectionRectVisual() {
   }
 
   ensureSelectionRect();
-  if (!selectionRectEl) {
-    return;
-  }
-
-  const left = Math.min(selectionStart.x, selectionCurrent.x);
-  const top = Math.min(selectionStart.y, selectionCurrent.y);
-  const width = Math.abs(selectionCurrent.x - selectionStart.x);
-  const height = Math.abs(selectionCurrent.y - selectionStart.y);
-
-  selectionRectEl.style.left = `${left}px`;
-  selectionRectEl.style.top = `${top}px`;
-  selectionRectEl.style.width = `${width}px`;
-  selectionRectEl.style.height = `${height}px`;
-  selectionRectEl.classList.remove("hidden");
-}
-
-function updateSelectedNotesByArea() {
-  if (!selectionStart || !selectionCurrent) {
-    return;
-  }
-
-  const left = Math.min(selectionStart.x, selectionCurrent.x);
-  const top = Math.min(selectionStart.y, selectionCurrent.y);
-  const right = Math.max(selectionStart.x, selectionCurrent.x);
-  const bottom = Math.max(selectionStart.y, selectionCurrent.y);
-  const bounds = getScaledNoteBounds();
-  const selected = new Set();
-
-  getVisibleNotes().forEach((note) => {
-    const noteLeft = note.x;
-    const noteTop = note.y;
-    const noteRight = note.x + bounds.width;
-    const noteBottom = note.y + bounds.height;
-    const intersects = noteLeft < right && noteRight > left && noteTop < bottom && noteBottom > top;
-
-    if (intersects) {
-      selected.add(note.id);
-    }
+  const ids = Array.from(selectedNoteIds).filter((id) => {
+    const note = notes.find((item) => item.id === id);
+    return note && isActiveNote(note);
   });
+    return;
+    setBoardActionStatus("Nejdřív označ aktivní lístky.");
 
-  selectedNoteIds = selected;
-  boardCanvas.querySelectorAll(".sticky").forEach((stickyEl) => {
-    const isSelected = selectedNoteIds.has(stickyEl.dataset.id || "");
-    stickyEl.classList.toggle("selected", isSelected);
+  const left = Math.min(selectionStart.x, selectionCurrent.x);
+  const top = Math.min(selectionStart.y, selectionCurrent.y);
+  openConfirmModal({
+    title: "Přesunout vybrané lístky do vyřešených?",
+    message: `Vybrané lístky (${ids.length}) se přesunou mimo plochu do archivu vyřešených.`,
+    confirmLabel: "Přesunout do vyřešených",
+    onConfirm: () => {
+      socket.emit("note:markManyDone", { ids }, (response) => {
+        if (!response?.ok) {
+          setBoardActionStatus(response?.message || "Přesun vybraných lístků do vyřešených se nepodařil.", true);
+          return;
+        }
+
+        const updatedCount = Number(response?.updatedCount || 0);
+        const deniedCount = Number(response?.deniedCount || 0);
+        const alreadyDoneCount = Number(response?.alreadyDoneCount || 0);
+
+        if (updatedCount === 0) {
+          if (deniedCount > 0) {
+            setBoardActionStatus("Vybrané lístky nemůžeš přesunout do vyřešených.", true);
+            return;
+          }
+
+          if (alreadyDoneCount > 0) {
+            setBoardActionStatus("Vybrané lístky už jsou mimo plochu ve vyřešených.");
+            return;
+          }
+
+          setBoardActionStatus("Vybrané lístky už nejsou aktivní.");
+          return;
+        }
+
+        const details = [];
+        if (alreadyDoneCount > 0) {
+          details.push(`už vyřešené: ${alreadyDoneCount}`);
+        }
+        if (deniedCount > 0) {
+          details.push(`přeskočeno: ${deniedCount}`);
+        }
+
+        setBoardActionStatus(
+          details.length > 0
+            ? `Přesunuto do vyřešených: ${updatedCount} (${details.join(", ")}).`
+            : `Přesunuto do vyřešených: ${updatedCount}.`
+        );
+      });
+    }
   });
 }
 
@@ -1894,20 +3097,24 @@ function createStickyElement(note) {
   const deleteToggle = fragment.querySelector(".delete-toggle");
 
   sticky.dataset.id = note.id;
+  sticky.classList.add("appear");
+  sticky.addEventListener("animationend", () => sticky.classList.remove("appear"), { once: true });
   sticky.style.background = note.color;
   sticky.style.left = `${note.x}px`;
   sticky.style.top = `${note.y}px`;
+  sticky.style.width = `${Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH}px`;
+  sticky.style.height = `${Number.isFinite(note.height) ? note.height : NOTE_DEFAULT_HEIGHT}px`;
   sticky.style.setProperty("--tilt", `${Math.random() * 6 - 3}deg`);
 
-  text.textContent = note.text;
+  text.innerHTML = richTextToDisplayHtml(note.text);
   applyNoteFormatToElement(text, note.format);
   delegation.textContent = `${note.from} -> ${note.to}`;
   details.textContent = `P:${formatPriorityLabel(note.priority)}${note.deadline ? ` | T:${note.deadline}` : ""}`;
-  text.title = note.text;
-  delegation.title = `Delegace: ${note.from} -> ${note.to}`;
+  text.title = richTextToPlain(note.text);
+  delegation.title = `Autor: ${note.from} | Řešitel: ${note.to}`;
   details.title = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}`;
-  doneToggle.textContent = note.done ? "Obnovit" : "Vyřešeno";
-  sticky.classList.toggle("done", note.done);
+  doneToggle.textContent = getNoteStatus(note) === "done" ? "Obnovit" : "Vyřešeno";
+  sticky.classList.toggle("done", getNoteStatus(note) === "done");
   sticky.classList.toggle("selected", selectedNoteIds.has(note.id));
 
   const canDelete = canEditNote(note);
@@ -1921,9 +3128,25 @@ function createStickyElement(note) {
 
   if (canToggleNote(note)) {
     doneToggle.addEventListener("click", () => {
-      socket.emit("note:toggle", { id: note.id }, (response) => {
-        if (!response?.ok && response?.message) {
-          setBoardActionStatus(response.message, true);
+      const waitsForSourceResolution = isActiveNote(note) && Boolean(sanitizeLinkedSourceNoteId(note.linkedSourceNoteId));
+      openConfirmModal({
+        title: "Přesunout lístek do vyřešených?",
+        message: waitsForSourceResolution
+          ? `Lístek \"${getNoteSummary(note, 64)}\" bude označen jako vyřešený, ale zůstane na ploše, dokud nebude vyřešen i navázaný lístek zadavatele.`
+          : `Lístek \"${getNoteSummary(note, 64)}\" se přesune mimo plochu do archivu vyřešených.`,
+        confirmLabel: "Přesunout do vyřešených",
+        onConfirm: () => {
+          socket.emit("note:toggle", { id: note.id }, (response) => {
+            if (!response?.ok && response?.message) {
+              setBoardActionStatus(response.message, true);
+              return;
+            }
+            setBoardActionStatus(
+              waitsForSourceResolution
+                ? "Lístek byl označen jako vyřešený a zůstává na ploše do vyřešení zadání."
+                : "Lístek byl přesunut do vyřešených."
+            );
+          });
         }
       });
     });
@@ -1933,71 +3156,62 @@ function createStickyElement(note) {
     event.preventDefault();
     event.stopPropagation();
 
-    const ok = window.confirm("Opravdu smazat tento lístek?");
-    if (!ok) {
-      return;
-    }
-
-    if (pendingDeleteTimer) {
-      clearTimeout(pendingDeleteTimer);
-    }
-
-    pendingDeleteId = note.id;
-    setBoardActionStatus("Mazání lístku...", false);
-
-    pendingDeleteTimer = window.setTimeout(() => {
-      const stillExists = notes.some((item) => item.id === pendingDeleteId);
-      if (stillExists) {
-        setBoardActionStatus("Smazání se nepodařilo. Zkus to znovu.", true);
-      }
-      pendingDeleteId = null;
-      pendingDeleteTimer = null;
-    }, 3500);
-
-    socket.emit("note:delete", { id: note.id }, (response) => {
-      if (!response?.ok && response?.message) {
-        setBoardActionStatus(response.message, true);
+    openConfirmModal({
+      title: "Smazat lístek?",
+      message: `Lístek \"${getNoteSummary(note, 64)}\" se trvale smaže z plochy.`,
+      confirmLabel: "Smazat lístek",
+      confirmTone: "danger",
+      onConfirm: () => {
+        socket.emit("note:delete", { id: note.id }, (response) => {
+          if (!response?.ok && response?.message) {
+            setBoardActionStatus(response.message, true);
+            return;
+          }
+          setBoardActionStatus("Lístek byl smazán.");
+        });
       }
     });
   });
 
+  const resizeHandle = document.createElement("button");
+  resizeHandle.type = "button";
+  resizeHandle.className = "note-resize";
+  resizeHandle.setAttribute("aria-label", "Změnit velikost tažením");
+  resizeHandle.title = "Změnit velikost tažením";
+
+  const canResize = canEditNote(note);
+  if (!canResize) {
+    resizeHandle.classList.add("hidden");
+  }
+
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    startNoteResize(note, sticky, event);
+  });
+
+  sticky.append(resizeHandle);
+
   sticky.addEventListener("pointerdown", (event) => {
-    if (note.done || !canMoveNote(note)) {
+    if (!isActiveNote(note) || !canMoveNote(note)) {
       return;
     }
 
-    if (event.target.closest(".done-toggle") || event.target.closest(".delete-toggle") || event.button !== 0) {
+    if (event.target.closest(".done-toggle") || event.target.closest(".delete-toggle") || event.target.closest(".note-resize") || event.target.closest(".board-text-resize") || event.button !== 0) {
       return;
     }
-
-    dragged = note;
-    draggedElement = sticky;
-    activePointerId = event.pointerId;
 
     const boardRect = board.getBoundingClientRect();
-    dragOffset.x = event.clientX - boardRect.left - note.x + board.scrollLeft;
-    dragOffset.y = event.clientY - boardRect.top - note.y + board.scrollTop;
-
-    const selectedMovable = getSelectedMovableNotes();
-    if (selectedNoteIds.has(note.id) && selectedMovable.length > 1) {
-      draggedSelection = selectedMovable.map((item) => ({
-        note: item,
-        startX: item.x,
-        startY: item.y,
-        element: boardCanvas.querySelector(`.sticky[data-id="${item.id}"]`)
-      }));
-
-      draggedSelection.forEach((entry) => {
-        if (entry.element) {
-          entry.element.style.zIndex = "10";
-        }
-      });
-    } else {
-      draggedSelection = null;
-    }
-
-    sticky.style.zIndex = "10";
-    sticky.setPointerCapture(event.pointerId);
+    pendingNoteDrag = {
+      note,
+      element: sticky,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      dragOffsetX: event.clientX - boardRect.left - note.x + board.scrollLeft,
+      dragOffsetY: event.clientY - boardRect.top - note.y + board.scrollTop
+    };
+    sticky.classList.add("drag-pending");
+    window.getSelection?.()?.removeAllRanges();
+    event.preventDefault();
   });
 
   sticky.addEventListener("dblclick", (event) => {
@@ -2007,58 +3221,108 @@ function createStickyElement(note) {
     openNotePreview(note);
   });
 
-  sticky.addEventListener("pointerenter", (event) => {
-    if (!me) {
-      return;
-    }
-
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-
-    if (target.closest(".done-toggle") || target.closest(".delete-toggle")) {
-      return;
-    }
-
-    scheduleHoverPreview(note.id);
-  });
-
-  sticky.addEventListener("pointermove", () => {
-    if (pendingHoverPreviewNoteId !== note.id) {
-      return;
-    }
-
-    scheduleHoverPreview(note.id);
-  });
-
-  sticky.addEventListener("pointerleave", () => {
-    if (pendingHoverPreviewNoteId === note.id) {
-      clearPendingHoverPreviewTimer();
-    }
-  });
-
   return sticky;
 }
 
 function renderBoard() {
+  const fragment = document.createDocumentFragment();
+
+  boardTexts.forEach((item) => {
+    try {
+      fragment.append(createBoardTextElement(item));
+    } catch (error) {
+      console.error("Nepodarilo se vykreslit text na plose", item, error);
+    }
+  });
+
+  getVisibleNotes().forEach((note) => {
+    try {
+      fragment.append(createStickyElement(note));
+    } catch (error) {
+      console.error("Nepodarilo se vykreslit listek", note, error);
+    }
+  });
+
   boardCanvas.querySelectorAll(".sticky, .board-text-node").forEach((item) => {
     item.remove();
   });
 
-  boardTexts.forEach((item) => {
-    boardCanvas.append(createBoardTextElement(item));
-  });
-
-  getVisibleNotes().forEach((note) => {
-    boardCanvas.append(createStickyElement(note));
-  });
+  boardCanvas.append(fragment);
+  renderNoteConnections();
 
   ensureGuideElements();
   hideAlignmentGuides();
   ensureSelectionRect();
   clearSelectionVisual();
   updateDonePositionHints();
+  refreshArchivedNotesUi();
+  renderDelegatedSourceSelects();
+}
+
+function removeRenderedBoardItem(selector) {
+  const element = boardCanvas?.querySelector(selector);
+  if (element) {
+    element.remove();
+  }
+
+  ensureGuideElements();
+  hideAlignmentGuides();
+  ensureSelectionRect();
+  clearSelectionVisual();
+  updateDonePositionHints();
+  refreshArchivedNotesUi();
+  renderNoteConnections();
+  renderDelegatedSourceSelects();
+}
+
+function syncNoteAfterServerUpdate(note, previousStatus = "active") {
+  if (!note?.id) {
+    return;
+  }
+
+  const currentStatus = getNoteStatus(note);
+  const selector = `.sticky[data-id="${note.id}"]`;
+  const isStillVisibleOnBoard = isNoteVisibleOnBoard(note);
+
+  if (currentStatus !== "active") {
+    selectedNoteIds.delete(note.id);
+    if (!isStillVisibleOnBoard && activePreviewNoteId === note.id) {
+      closeNotePreview();
+    }
+    if (dragged && dragged.id === note.id) {
+      dragged = null;
+      draggedElement = null;
+      activePointerId = null;
+    }
+
+    if (!isStillVisibleOnBoard) {
+      removeRenderedBoardItem(selector);
+      refreshArchivedNotesUi();
+      return;
+    }
+
+    renderBoard();
+    if (activePreviewNoteId === note.id) {
+      refreshOpenPreview();
+    }
+    return;
+  }
+
+  const bounds = getNoteBounds(note);
+  ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
+
+  if (previousStatus !== "active") {
+    renderBoard();
+    if (note.id === activePreviewNoteId) {
+      refreshOpenPreview();
+    }
+    return;
+  }
+
+  renderBoard();
+  if (note.id === activePreviewNoteId) {
+    refreshOpenPreview();
+  }
 }
 
 loginForm.addEventListener("submit", (event) => {
@@ -2092,15 +3356,15 @@ noteForm.addEventListener("submit", (event) => {
     return;
   }
 
-  const text = noteText.value.trim();
+  const text = getRichEditorValue(noteText);
   if (!text) {
     return;
   }
 
   socket.emit("note:create", {
     text,
-    from: me.name,
     to: toUser.value,
+    isDelegated: Boolean(noteIsDelegated?.checked),
     priority: priority.value,
     deadline: deadline.value,
     color: selectedNoteColor,
@@ -2110,20 +3374,25 @@ noteForm.addEventListener("submit", (event) => {
   });
 
   noteForm.reset();
-  fromUser.value = me.name;
+  clearRichEditor(noteText);
+  setAuthorFieldValue(fromUser, me?.name || "");
+  if (noteIsDelegated) {
+    noteIsDelegated.checked = false;
+  }
   selectedNoteColor = noteColors[0];
   resetNoteFormatToolbar(noteFormatToolbar);
   renderNotePalette();
+  renderDelegatedSourceSelects();
   closeDockPanel();
 });
 
-boardCanvas?.addEventListener("dblclick", (event) => {
+function handleBoardSurfaceDoubleClick(event) {
   if (!me) {
     return;
   }
 
   const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof Element)) {
     return;
   }
 
@@ -2131,16 +3400,20 @@ boardCanvas?.addEventListener("dblclick", (event) => {
     target.closest(".sticky") ||
     target.closest(".board-inline-composer") ||
     target.closest(".board-text-node") ||
-    target.closest(".board-quick-create")
+    target.closest(".board-quick-create") ||
+    target.closest(".board-nav-hints")
   ) {
     return;
   }
 
   event.preventDefault();
+  window.getSelection?.()?.removeAllRanges();
   closeNotePreview();
   closeBoardInlineComposer();
   openBoardQuickCreateAt(event.clientX, event.clientY);
-});
+}
+
+board?.addEventListener("dblclick", handleBoardSurfaceDoubleClick);
 
 boardCanvas?.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) {
@@ -2178,16 +3451,19 @@ boardCanvas?.addEventListener("pointerdown", (event) => {
 
 assigneeFilter.addEventListener("change", renderBoard);
 
+toUser?.addEventListener("change", renderDelegatedSourceSelects);
+boardInlineToUser?.addEventListener("change", renderDelegatedSourceSelects);
+notePreviewEditTo?.addEventListener("change", renderDelegatedSourceSelects);
+noteIsDelegated?.addEventListener("change", renderDelegatedSourceSelects);
+boardInlineIsDelegated?.addEventListener("change", renderDelegatedSourceSelects);
+notePreviewEditIsDelegated?.addEventListener("change", renderDelegatedSourceSelects);
+
 dockToggleNote?.addEventListener("click", () => {
   openDockSection("note");
 });
 
 dockToggleFilter?.addEventListener("click", () => {
   openDockSection("filter");
-});
-
-dockToggleBoard?.addEventListener("click", () => {
-  openDockSection("board");
 });
 
 dockToggleActions?.addEventListener("click", () => {
@@ -2252,7 +3528,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
     return;
   }
 
-  const text = notePreviewEditText.value.trim();
+  const text = getRichEditorValue(notePreviewEditText);
   if (!text) {
     setPreviewEditStatus("Doplň text lístku.", true);
     return;
@@ -2271,6 +3547,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
       id: note.id,
       text,
       to: notePreviewEditTo.value,
+      isDelegated: Boolean(notePreviewEditIsDelegated?.checked),
       priority: notePreviewEditPriority.value,
       deadline: notePreviewEditDeadline.value,
       color: previewEditSelectedColor,
@@ -2471,15 +3748,65 @@ boardInlinePasteNoteTextBtn?.addEventListener("click", () => {
 
 document.addEventListener("click", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof Element)) {
     return;
   }
 
   const formatButton = target.closest(".format-btn");
   if (formatButton instanceof HTMLElement) {
-    const isPressed = formatButton.getAttribute("aria-pressed") === "true";
-    formatButton.setAttribute("aria-pressed", isPressed ? "false" : "true");
-    formatButton.classList.toggle("active", !isPressed);
+    const action = formatButton.dataset.formatAction;
+    const editor = getEmojiTargetTextarea(formatButton);
+    if (editor && editor.isContentEditable && (action === "bold" || action === "italic")) {
+      const pendingRange = pendingInlineFormatSelection?.editor === editor ? pendingInlineFormatSelection.range : null;
+      const cachedRange = lastRichEditorSelection?.editor === editor ? lastRichEditorSelection.range : null;
+      const liveSelection = window.getSelection?.();
+      const liveRange = liveSelection && liveSelection.rangeCount > 0 ? liveSelection.getRangeAt(0) : null;
+      const effectiveRange = [liveRange, pendingRange, cachedRange].find((range) => range && !range.collapsed)
+        || liveRange
+        || pendingRange
+        || cachedRange;
+      const hadSelection = Boolean(effectiveRange && !effectiveRange.collapsed);
+      const formatTags = action === "bold" ? ["b", "strong"] : ["i", "em"];
+      const restored = effectiveRange
+        ? restoreRangeForEditor(editor, effectiveRange)
+        : restoreSelectionForEditor(editor);
+      if (!restored) {
+        editor.focus();
+      }
+      try {
+        document.execCommand("styleWithCSS", false, false);
+      } catch {
+        /* older browsers ignore this */
+      }
+      document.execCommand(action, false);
+      if (hadSelection) {
+        window.setTimeout(() => {
+          rememberPendingInlineFormatSelection(editor);
+          moveCaretAfterInlineFormat(editor, formatTags);
+          normalizeInlineTypingMode(editor);
+          saveSelectionForEditor(editor);
+          updateFormatButtonsState(editor);
+        }, 0);
+      } else {
+        clearPendingInlineFormatSelection(editor);
+        normalizeInlineTypingMode(editor);
+        saveSelectionForEditor(editor);
+        updateFormatButtonsState(editor);
+      }
+    }
+    const field = formatButton.dataset.formatField;
+    const value = formatButton.dataset.formatValue;
+    if (editor && field && value) {
+      const toolbar = formatButton.closest(".text-format-toolbar");
+      if (toolbar) {
+        setNoteFormatToolbar(toolbar, {
+          ...getEditorFormatState(editor),
+          [field]: value
+        });
+        applyToolbarFormatToEditor(editor, toolbar);
+        editor.focus();
+      }
+    }
     return;
   }
 
@@ -2490,57 +3817,93 @@ document.addEventListener("click", (event) => {
 
   const emoji = emojiButton.dataset.emoji || "";
   insertTextAtCursor(getEmojiTargetTextarea(emojiButton), emoji);
+  // zavrít panel po výběru
+  const openPalette = emojiButton.closest(".emoji-palette");
+  if (openPalette) {
+    openPalette.hidden = true;
+    openPalette.style.top = "";
+    openPalette.style.left = "";
+    openPalette.style.transform = "";
+    openPalette.closest(".emoji-picker-wrap")?.querySelector(".emoji-toggle-btn")?.setAttribute("aria-expanded", "false");
+  }
 });
 
-deleteAllBtn.addEventListener("click", () => {
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof HTMLElement)) {
+    return;
+  }
+  if (!event.target.closest(".emoji-picker-wrap")) {
+    document.querySelectorAll(".emoji-palette").forEach((p) => {
+      if (!p.hidden) {
+        p.hidden = true;
+        p.style.top = "";
+        p.style.left = "";
+        p.style.transform = "";
+        p.closest(".emoji-picker-wrap")?.querySelector(".emoji-toggle-btn")?.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+});
+
+archiveIndicator?.addEventListener("click", () => {
+  openNoteArchive();
+});
+
+noteArchive?.addEventListener("click", (event) => {
+  if (event.target instanceof HTMLElement && event.target.dataset.closeArchive === "true") {
+    closeNoteArchive();
+  }
+});
+
+noteArchiveClose?.addEventListener("click", () => {
+  closeNoteArchive();
+});
+
+confirmModal?.addEventListener("click", (event) => {
+  if (event.target instanceof HTMLElement && event.target.dataset.closeConfirm === "true") {
+    closeConfirmModal();
+  }
+});
+
+confirmModalCancel?.addEventListener("click", () => {
+  closeConfirmModal();
+});
+
+confirmModalConfirm?.addEventListener("click", () => {
+  runPendingConfirmAction();
+});
+
+deleteAllBtn?.addEventListener("click", () => {
   if (!me) {
     setBoardActionStatus("Nejdříve se přihlas.", true);
     return;
   }
 
-  if (notes.length === 0) {
-    setBoardActionStatus("Na ploše není žádný lístek.");
+  const activeCount = notes.filter((note) => isActiveNote(note)).length;
+  if (activeCount === 0) {
+    setBoardActionStatus("Na ploše není žádný aktivní lístek.");
     return;
   }
 
-  const ok = window.confirm("Opravdu smazat všechny lístky na nástěnce?");
-  if (!ok) {
-    return;
-  }
+  openConfirmModal({
+    title: "Smazat všechny aktivní lístky?",
+    message: `Všechny aktivní lístky (${activeCount}) se trvale smažou z plochy.`,
+    confirmLabel: "Smazat vše",
+    confirmTone: "danger",
+    onConfirm: () => {
+      socket.emit("note:deleteAll", {}, (response) => {
+        if (!response?.ok) {
+          setBoardActionStatus(response?.message || "Smazání všech lístků se nepodařilo.", true);
+          return;
+        }
 
-  if (pendingDeleteAllTimer) {
-    clearTimeout(pendingDeleteAllTimer);
-  }
+        if (response?.removedCount === 0) {
+          setBoardActionStatus("Na ploše není žádný aktivní lístek.");
+          return;
+        }
 
-  pendingDeleteAll = true;
-  setBoardActionStatus("Mazání všech lístků...", false);
-
-  pendingDeleteAllTimer = window.setTimeout(() => {
-    if (pendingDeleteAll) {
-      setBoardActionStatus("Hromadné smazání se nepodařilo. Zkus to znovu.", true);
-    }
-    pendingDeleteAll = false;
-    pendingDeleteAllTimer = null;
-  }, 3500);
-
-  socket.emit("note:deleteAll", {}, (response) => {
-    if (!response?.ok && response?.message) {
-      setBoardActionStatus(response.message, true);
-      pendingDeleteAll = false;
-      if (pendingDeleteAllTimer) {
-        clearTimeout(pendingDeleteAllTimer);
-        pendingDeleteAllTimer = null;
-      }
-      return;
-    }
-
-    if (response?.removedCount === 0) {
-      setBoardActionStatus("Na ploše není žádný lístek.");
-      pendingDeleteAll = false;
-      if (pendingDeleteAllTimer) {
-        clearTimeout(pendingDeleteAllTimer);
-        pendingDeleteAllTimer = null;
-      }
+        setBoardActionStatus(`Smazáno lístků: ${response.removedCount}.`);
+      });
     }
   });
 });
@@ -2569,20 +3932,83 @@ document.addEventListener("pointermove", (event) => {
     return;
   }
 
+  if (pendingNoteDrag) {
+    if (event.pointerId !== pendingNoteDrag.pointerId) {
+      return;
+    }
+
+    const scale = getNoteScale();
+    const deltaX = (event.clientX - pendingNoteDrag.startClientX) / scale;
+    const deltaY = (event.clientY - pendingNoteDrag.startClientY) / scale;
+
+    if (Math.hypot(deltaX, deltaY) < NOTE_DRAG_START_THRESHOLD) {
+      return;
+    }
+
+    dragged = pendingNoteDrag.note;
+    draggedElement = pendingNoteDrag.element;
+    activePointerId = pendingNoteDrag.pointerId;
+    dragOffset.x = pendingNoteDrag.dragOffsetX;
+    dragOffset.y = pendingNoteDrag.dragOffsetY;
+    draggedElement.classList.remove("drag-pending");
+
+    const selectedMovable = getSelectedMovableNotes();
+    if (selectedNoteIds.has(dragged.id) && selectedMovable.length > 1) {
+      draggedSelection = selectedMovable.map((item) => ({
+        note: item,
+        startX: item.x,
+        startY: item.y,
+        element: boardCanvas.querySelector(`.sticky[data-id="${item.id}"]`)
+      }));
+
+      draggedSelection.forEach((entry) => {
+        if (entry.element) {
+          boardCanvas.append(entry.element);
+          entry.element.classList.add("dragging");
+          entry.element.style.zIndex = "10";
+        }
+      });
+    } else {
+      draggedSelection = null;
+    }
+
+    boardCanvas.append(draggedElement);
+    draggedElement.classList.add("dragging");
+    draggedElement.style.zIndex = "10";
+    draggedElement.setPointerCapture(activePointerId);
+    pendingNoteDrag = null;
+  }
+
   if (resizingBoardText && resizingBoardTextElement) {
     if (activeTextResizePointerId !== null && event.pointerId !== activeTextResizePointerId) {
       return;
     }
 
-    const dragDelta = event.clientX - textResizeStart.x + event.clientY - textResizeStart.y;
-    const nextSize = normalizeBoardTextSize(textResizeStart.size + dragDelta / 45);
+    const scale = getNoteScale();
+    const deltaX = (event.clientX - textResizeStart.x) / scale;
+    const deltaY = (event.clientY - textResizeStart.y) / scale;
+    const nextWidth = normalizeBoardTextDimension(textResizeStart.width + deltaX, BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH);
+    const nextHeight = normalizeBoardTextDimension(textResizeStart.height + deltaY, BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT);
+    const nextSize = getBoardTextResizeSize(
+      nextWidth,
+      nextHeight,
+      textResizeStart.width,
+      textResizeStart.height,
+      textResizeStart.size
+    );
+
+    resizingBoardText.width = nextWidth;
+    resizingBoardText.height = nextHeight;
     resizingBoardText.size = nextSize;
+    resizingBoardTextElement.style.width = `${nextWidth}px`;
+    resizingBoardTextElement.style.maxWidth = `${nextWidth}px`;
+    resizingBoardTextElement.style.height = `${nextHeight}px`;
     applyBoardTextSizeToElement(resizingBoardTextElement, nextSize);
 
     const now = performance.now();
     if (now - lastTextResizeEmitAt > 90) {
       lastTextResizeEmitAt = now;
-      emitBoardTextResize(resizingBoardText, nextSize);
+      emitBoardTextResize(resizingBoardText, nextWidth, nextHeight);
     }
     return;
   }
@@ -2595,16 +4021,18 @@ document.addEventListener("pointermove", (event) => {
     const boardRect = board.getBoundingClientRect();
     const nextX = event.clientX - boardRect.left - textDragOffset.x + board.scrollLeft;
     const nextY = event.clientY - boardRect.top - textDragOffset.y + board.scrollTop;
-    const maxX = Math.max(0, canvasWidth - BOARD_TEXT_WIDTH);
-    const maxY = Math.max(0, canvasHeight - BOARD_TEXT_HEIGHT);
+    const textWidth = Number.isFinite(draggedBoardText.width) ? draggedBoardText.width : BOARD_TEXT_WIDTH;
+    const textHeight = Number.isFinite(draggedBoardText.height) ? draggedBoardText.height : BOARD_TEXT_HEIGHT;
+    const maxX = Math.max(0, canvasWidth - textWidth);
+    const maxY = Math.max(0, canvasHeight - textHeight);
     const draftX = clamp(nextX, 0, maxX);
     const draftY = clamp(nextY, 0, maxY);
-    const aligned = updateAlignmentGuides(draftX, draftY, { width: BOARD_TEXT_WIDTH, height: BOARD_TEXT_HEIGHT }, "text", draggedBoardText.id);
+    const aligned = updateAlignmentGuides(draftX, draftY, { width: textWidth, height: textHeight }, "text", draggedBoardText.id);
 
     draggedBoardText.x = clamp(aligned.x, 0, maxX);
     draggedBoardText.y = clamp(aligned.y, 0, maxY);
 
-    ensureCanvasForPosition(draggedBoardText.x, draggedBoardText.y, BOARD_TEXT_WIDTH, BOARD_TEXT_HEIGHT);
+    ensureCanvasForPosition(draggedBoardText.x, draggedBoardText.y, textWidth, textHeight);
 
     draggedBoardTextElement.style.left = `${draggedBoardText.x}px`;
     draggedBoardTextElement.style.top = `${draggedBoardText.y}px`;
@@ -2613,6 +4041,31 @@ document.addEventListener("pointermove", (event) => {
     if (now - lastTextMoveEmitAt > 45) {
       lastTextMoveEmitAt = now;
       socket.emit("text:move", { id: draggedBoardText.id, x: draggedBoardText.x, y: draggedBoardText.y });
+    }
+    return;
+  }
+
+  if (resizingNote && resizingNoteElement) {
+    if (activeNoteResizePointerId !== null && event.pointerId !== activeNoteResizePointerId) {
+      return;
+    }
+
+    const scale = getNoteScale();
+    const deltaX = (event.clientX - noteResizeStart.x) / scale;
+    const deltaY = (event.clientY - noteResizeStart.y) / scale;
+    const nextWidth = normalizeNoteSize(noteResizeStart.width + deltaX, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH);
+    const nextHeight = normalizeNoteSize(noteResizeStart.height + deltaY, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT);
+
+    resizingNote.width = nextWidth;
+    resizingNote.height = nextHeight;
+    resizingNoteElement.style.width = `${nextWidth}px`;
+    resizingNoteElement.style.height = `${nextHeight}px`;
+    renderNoteConnections();
+
+    const now = performance.now();
+    if (now - lastNoteResizeEmitAt > 90) {
+      lastNoteResizeEmitAt = now;
+      emitNoteResize(resizingNote, nextWidth, nextHeight);
     }
     return;
   }
@@ -2628,7 +4081,7 @@ document.addEventListener("pointermove", (event) => {
   const boardRect = board.getBoundingClientRect();
   const nextX = event.clientX - boardRect.left - dragOffset.x + board.scrollLeft;
   const nextY = event.clientY - boardRect.top - dragOffset.y + board.scrollTop;
-  const bounds = getScaledNoteBounds();
+  const bounds = getNoteBounds(dragged);
   const maxX = Math.max(0, canvasWidth - bounds.width);
   const maxY = Math.max(0, canvasHeight - bounds.height);
 
@@ -2644,31 +4097,22 @@ document.addEventListener("pointermove", (event) => {
 
     let deltaX = aligned.x - anchor.startX;
     let deltaY = aligned.y - anchor.startY;
-    let minDeltaX = -Infinity;
-    let maxDeltaX = Infinity;
-    let minDeltaY = -Infinity;
-    let maxDeltaY = Infinity;
 
     draggedSelection.forEach((entry) => {
-      minDeltaX = Math.max(minDeltaX, -entry.startX);
-      maxDeltaX = Math.min(maxDeltaX, maxX - entry.startX);
-      minDeltaY = Math.max(minDeltaY, -entry.startY);
-      maxDeltaY = Math.min(maxDeltaY, maxY - entry.startY);
-    });
-
-    deltaX = clamp(deltaX, minDeltaX, maxDeltaX);
-    deltaY = clamp(deltaY, minDeltaY, maxDeltaY);
-
-    draggedSelection.forEach((entry) => {
-      entry.note.x = clamp(entry.startX + deltaX, 0, maxX);
-      entry.note.y = clamp(entry.startY + deltaY, 0, maxY);
-      ensureCanvasForPosition(entry.note.x, entry.note.y, bounds.width, bounds.height);
+      const entryBounds = getNoteBounds(entry.note);
+      const entryMaxX = Math.max(0, canvasWidth - entryBounds.width);
+      const entryMaxY = Math.max(0, canvasHeight - entryBounds.height);
+      entry.note.x = clamp(entry.startX + deltaX, 0, entryMaxX);
+      entry.note.y = clamp(entry.startY + deltaY, 0, entryMaxY);
+      ensureCanvasForPosition(entry.note.x, entry.note.y, entryBounds.width, entryBounds.height);
 
       if (entry.element) {
         entry.element.style.left = `${entry.note.x}px`;
         entry.element.style.top = `${entry.note.y}px`;
       }
     });
+
+    renderNoteConnections();
 
     const now = performance.now();
     if (now - lastMoveEmitAt > 45) {
@@ -2686,6 +4130,7 @@ document.addEventListener("pointermove", (event) => {
 
   draggedElement.style.left = `${dragged.x}px`;
   draggedElement.style.top = `${dragged.y}px`;
+  renderNoteConnections();
 
   const now = performance.now();
   if (now - lastMoveEmitAt > 45) {
@@ -2695,6 +4140,14 @@ document.addEventListener("pointermove", (event) => {
 });
 
 document.addEventListener("pointerup", (event) => {
+  if (pendingNoteDrag) {
+    if (event.pointerId === pendingNoteDrag.pointerId) {
+      pendingNoteDrag.element?.classList.remove("drag-pending");
+      pendingNoteDrag = null;
+    }
+    return;
+  }
+
   if (selectionStart && selectionCurrent) {
     if (selectionPointerId !== null && event.pointerId !== selectionPointerId) {
       return;
@@ -2712,8 +4165,24 @@ document.addEventListener("pointerup", (event) => {
       return;
     }
 
-    const finalSize = normalizeBoardTextSize(resizingBoardText.size);
-    emitBoardTextResize(resizingBoardText, finalSize, (response) => {
+    const finalWidth = normalizeBoardTextDimension(resizingBoardText.width, BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH);
+    const finalHeight = normalizeBoardTextDimension(resizingBoardText.height, BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT);
+    const finalSize = getBoardTextResizeSize(
+      finalWidth,
+      finalHeight,
+      textResizeStart.width,
+      textResizeStart.height,
+      textResizeStart.size
+    );
+    resizingBoardText.width = finalWidth;
+    resizingBoardText.height = finalHeight;
+    resizingBoardText.size = finalSize;
+    resizingBoardTextElement.style.width = `${finalWidth}px`;
+    resizingBoardTextElement.style.maxWidth = `${finalWidth}px`;
+    resizingBoardTextElement.style.height = `${finalHeight}px`;
+    applyBoardTextSizeToElement(resizingBoardTextElement, finalSize);
+
+    emitBoardTextResize(resizingBoardText, finalWidth, finalHeight, (response) => {
       if (!response?.ok) {
         setBoardActionStatus(response?.message || "Změna velikosti textu se nepodařila.", true);
         return;
@@ -2752,6 +4221,38 @@ document.addEventListener("pointerup", (event) => {
     return;
   }
 
+  if (resizingNote && resizingNoteElement) {
+    if (activeNoteResizePointerId !== null && event.pointerId !== activeNoteResizePointerId) {
+      return;
+    }
+
+    const finalWidth = normalizeNoteSize(resizingNote.width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH);
+    const finalHeight = normalizeNoteSize(resizingNote.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT);
+    resizingNote.width = finalWidth;
+    resizingNote.height = finalHeight;
+    resizingNoteElement.style.width = `${finalWidth}px`;
+    resizingNoteElement.style.height = `${finalHeight}px`;
+
+    emitNoteResize(resizingNote, finalWidth, finalHeight, (response) => {
+      if (!response?.ok) {
+        setBoardActionStatus(response?.message || "Změna velikosti lístku se nepodařila.", true);
+        return;
+      }
+
+      setBoardActionStatus("Velikost lístku byla změněna.");
+    });
+    resizingNoteElement.classList.remove("resizing");
+
+    if (activeNoteResizePointerId !== null && resizingNoteElement.hasPointerCapture(activeNoteResizePointerId)) {
+      resizingNoteElement.releasePointerCapture(activeNoteResizePointerId);
+    }
+
+    resizingNote = null;
+    resizingNoteElement = null;
+    activeNoteResizePointerId = null;
+    return;
+  }
+
   if (!dragged || !draggedElement) {
     return;
   }
@@ -2764,6 +4265,7 @@ document.addEventListener("pointerup", (event) => {
     draggedSelection.forEach((entry) => {
       socket.emit("note:move", { id: entry.note.id, x: entry.note.x, y: entry.note.y });
       if (entry.element) {
+        entry.element.classList.remove("dragging");
         entry.element.style.zIndex = "";
       }
     });
@@ -2781,6 +4283,7 @@ document.addEventListener("pointerup", (event) => {
   }
 
   socket.emit("note:move", { id: dragged.id, x: dragged.x, y: dragged.y });
+  draggedElement.classList.remove("dragging");
   draggedElement.style.zIndex = "";
 
   if (activePointerId !== null && draggedElement.hasPointerCapture(activePointerId)) {
@@ -2811,7 +4314,7 @@ socket.on("auth:ok", (user) => {
   appShell.classList.remove("hidden");
   meBadge.textContent = `Přihlášen: ${me.name}`;
   logoutBtn?.classList.remove("hidden");
-  fromUser.value = me.name;
+  setAuthorFieldValue(fromUser, me.name);
   loginPassword.value = "";
   loadRegisteredUsers();
   loadSnapshotOptions();
@@ -2832,11 +4335,11 @@ socket.on("connect", () => {
 });
 
 socket.on("board:init", ({ notes: initialNotes, texts: initialTexts, activity }) => {
-  notes = initialNotes || [];
-  boardTexts = initialTexts || [];
+  notes = Array.isArray(initialNotes) ? initialNotes.map(normalizeIncomingNote).filter(Boolean) : [];
+  boardTexts = Array.isArray(initialTexts) ? initialTexts.map(normalizeIncomingBoardText).filter(Boolean) : [];
   selectedNoteIds = new Set();
-  const bounds = getScaledNoteBounds();
   notes.forEach((note) => {
+    const bounds = getNoteBounds(note);
     ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
   });
   boardTexts.forEach((item) => {
@@ -2859,7 +4362,7 @@ socket.on("activity:list", (items) => {
 
 socket.on("note:created", (note) => {
   upsertNote(note);
-  const bounds = getScaledNoteBounds();
+  const bounds = getNoteBounds(note);
   ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
   renderBoard();
 });
@@ -2897,14 +4400,39 @@ socket.on("text:updated", (item) => {
     return;
   }
 
-  const textBody = element.querySelector(".board-text-body");
+  const textBody = element.querySelector(".board-text-content");
   if (textBody) {
     textBody.textContent = item.text;
   }
   applyBoardTextSizeToElement(element, item.size);
+  element.style.width = `${Number.isFinite(item.width) ? item.width : BOARD_TEXT_WIDTH}px`;
+  element.style.maxWidth = `${Number.isFinite(item.width) ? item.width : BOARD_TEXT_WIDTH}px`;
+  element.style.height = `${Number.isFinite(item.height) ? item.height : BOARD_TEXT_HEIGHT}px`;
   element.title = `${item.author || "Uživatel"}: ${item.text}`;
   renderBoard();
 });
+
+socket.on("text:resized", ({ id, width, height, size }) => {
+  const textItem = boardTexts.find((item) => item.id === id);
+  if (!textItem) {
+    return;
+  }
+
+  textItem.width = normalizeBoardTextDimension(width, BOARD_TEXT_WIDTH, BOARD_TEXT_MIN_WIDTH);
+  textItem.height = normalizeBoardTextDimension(height, BOARD_TEXT_HEIGHT, BOARD_TEXT_MIN_HEIGHT);
+  textItem.size = normalizeBoardTextSize(
+    size ?? getBoardTextResizeSize(textItem.width, textItem.height, textItem.width, textItem.height, textItem.size)
+  );
+
+  const element = boardCanvas.querySelector(`.board-text-node[data-id="${id}"]`);
+  if (element) {
+    element.style.width = `${textItem.width}px`;
+    element.style.maxWidth = `${textItem.width}px`;
+    element.style.height = `${textItem.height}px`;
+    applyBoardTextSizeToElement(element, textItem.size);
+  }
+});
+
 socket.on("text:deleted", ({ id }) => {
   boardTexts = boardTexts.filter((item) => item.id !== id);
 
@@ -2918,7 +4446,7 @@ socket.on("text:deleted", ({ id }) => {
     hideAlignmentGuides();
   }
 
-  renderBoard();
+  removeRenderedBoardItem(`.board-text-node[data-id="${id}"]`);
   setBoardActionStatus("Text byl smazán.");
 });
 
@@ -2931,7 +4459,7 @@ socket.on("note:moved", ({ id, x, y }) => {
   note.x = snapToGrid(x);
   note.y = snapToGrid(y);
 
-  const bounds = getScaledNoteBounds();
+  const bounds = getNoteBounds(note);
   ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
 
   const element = boardCanvas.querySelector(`.sticky[data-id="${id}"]`);
@@ -2939,6 +4467,30 @@ socket.on("note:moved", ({ id, x, y }) => {
     element.style.left = `${note.x}px`;
     element.style.top = `${note.y}px`;
   }
+
+  renderNoteConnections();
+
+  if (id === activePreviewNoteId) {
+    refreshOpenPreview();
+  }
+});
+
+socket.on("note:resized", ({ id, width, height }) => {
+  const note = notes.find((item) => item.id === id);
+  if (!note) {
+    return;
+  }
+
+  note.width = normalizeNoteSize(width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH);
+  note.height = normalizeNoteSize(height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT);
+
+  const element = boardCanvas.querySelector(`.sticky[data-id="${id}"]`);
+  if (element) {
+    element.style.width = `${note.width}px`;
+    element.style.height = `${note.height}px`;
+  }
+
+  renderNoteConnections();
 
   if (id === activePreviewNoteId) {
     refreshOpenPreview();
@@ -2950,14 +4502,16 @@ socket.on("note:updated", (nextNote) => {
     return;
   }
 
-  upsertNote(nextNote);
-  const bounds = getScaledNoteBounds();
-  ensureCanvasForPosition(nextNote.x, nextNote.y, bounds.width, bounds.height);
-  renderBoard();
+  const previousNote = notes.find((item) => item.id === nextNote.id);
+  const previousStatus = previousNote ? getNoteStatus(previousNote) : "active";
 
-  if (nextNote.id === activePreviewNoteId) {
-    refreshOpenPreview();
+  upsertNote(nextNote);
+  const note = notes.find((item) => item.id === nextNote.id);
+  if (!note) {
+    return;
   }
+
+  syncNoteAfterServerUpdate(note, previousStatus);
 });
 
 socket.on("note:toggled", ({ id, done, x, y, moved }) => {
@@ -2981,7 +4535,7 @@ socket.on("note:toggled", ({ id, done, x, y, moved }) => {
   if (Number.isFinite(x) && Number.isFinite(y)) {
     note.x = x;
     note.y = y;
-    const bounds = getScaledNoteBounds();
+    const bounds = getNoteBounds(note);
     ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
   }
 
@@ -3034,7 +4588,8 @@ socket.on("note:deleted", ({ id }) => {
     draggedElement = null;
     activePointerId = null;
   }
-  renderBoard();
+
+  removeRenderedBoardItem(`.sticky[data-id="${id}"]`);
   setBoardActionStatus("Lístek byl smazán.");
 });
 
@@ -3072,6 +4627,14 @@ window.addEventListener("pagehide", () => {
   });
 });
 
+window.addEventListener("pageshow", () => {
+  closeNotePreview(true);
+  closeBoardQuickCreate();
+  closeBoardInlineComposer();
+  clearSelection();
+  clearActiveBoardText();
+});
+
 socket.on("session:saved", ({ createdAt, noteCount }) => {
   const date = new Date(createdAt).toLocaleString("cs-CZ", {
     day: "2-digit",
@@ -3096,6 +4659,11 @@ applyCanvasSize();
 applyGridSize();
 applyNoteScale();
 applySnapState();
+closeNotePreview(true);
+closeBoardQuickCreate();
+closeBoardInlineComposer();
+clearSelection();
+clearActiveBoardText();
 applyAuthLandingMessage();
 if (!getStoredSessionToken()) {
   showLoginScreen();
