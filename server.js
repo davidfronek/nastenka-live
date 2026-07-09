@@ -1068,7 +1068,7 @@ io.on("connection", (socket) => {
       io.emit("note:updated", relinkedNote);
     }
     addActivity(
-      `${note.from} vytvořil/a lístek: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
+      `${note.from} vytvořil/a ticket: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
         note.deadline ? ` | termín ${note.deadline}` : ""
       }`
     );
@@ -1127,7 +1127,7 @@ io.on("connection", (socket) => {
 
     const note = notes.find((item) => item.id === String(id || ""));
     if (!note) {
-      ack?.({ ok: false, message: "Lístek už neexistuje." });
+      ack?.({ ok: false, message: "ticket už neexistuje." });
       return;
     }
 
@@ -1243,12 +1243,12 @@ io.on("connection", (socket) => {
     const note = notes.find((item) => item.id === id);
     const user = usersBySocket.get(socket.id);
     if (!note || !user) {
-      ack?.({ ok: false, message: "Lístek nebyl nalezen nebo nejsi přihlášen." });
+      ack?.({ ok: false, message: "ticket nebyl nalezen nebo nejsi přihlášen." });
       return;
     }
 
     if (!canToggleNote(user, note)) {
-      ack?.({ ok: false, message: "Tento lístek může měnit jen autor, admin nebo přiřazený uživatel." });
+      ack?.({ ok: false, message: "Tento ticket může měnit jen autor, admin nebo přiřazený uživatel." });
       return;
     }
 
@@ -1259,8 +1259,8 @@ io.on("connection", (socket) => {
     io.emit("note:updated", note);
     addActivity(
       nextStatus === "done"
-        ? `${user.name} přesunul/a lístek: "${textSnippet(note.text, 36)}" pro ${note.to} do vyřešených`
-        : `${user.name} obnovil/a lístek: "${textSnippet(note.text, 36)}" pro ${note.to} zpět na plochu`
+        ? `${user.name} přesunul/a ticket: "${textSnippet(note.text, 36)}" pro ${note.to} do vyřešených`
+        : `${user.name} obnovil/a ticket: "${textSnippet(note.text, 36)}" pro ${note.to} zpět na plochu`
     );
     ack?.({ ok: true, id: note.id, status: nextStatus });
   });
@@ -1274,12 +1274,12 @@ io.on("connection", (socket) => {
 
     const note = notes.find((item) => item.id === String(payload?.id || ""));
     if (!note) {
-      ack?.({ ok: false, message: "Lístek už neexistuje." });
+      ack?.({ ok: false, message: "ticket už neexistuje." });
       return;
     }
 
     if (getNoteStatus(note) !== "active") {
-      ack?.({ ok: false, message: "Upravovat můžeš jen aktivní lístek na ploše." });
+      ack?.({ ok: false, message: "Upravovat můžeš jen aktivní ticket na ploše." });
       return;
     }
 
@@ -1309,7 +1309,7 @@ io.on("connection", (socket) => {
       io.emit("note:updated", relinkedNote);
     }
     addActivity(
-      `${user.name} upravil/a lístek: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
+      `${user.name} upravil/a ticket: "${textSnippet(note.text)}" pro ${note.to} | priorita ${formatPriorityLabel(note.priority)}${
         note.deadline ? ` | termín ${note.deadline}` : ""
       }`
     );
@@ -1325,19 +1325,19 @@ io.on("connection", (socket) => {
 
     const note = notes.find((item) => item.id === String(id || ""));
     if (!note) {
-      ack?.({ ok: false, message: "Lístek už neexistuje." });
+      ack?.({ ok: false, message: "ticket už neexistuje." });
       return;
     }
 
     if (!canManageNote(user, note)) {
-      ack?.({ ok: false, message: "Tento lístek může smazat jen jeho autor nebo admin." });
+      ack?.({ ok: false, message: "Tento ticket může smazat jen jeho autor nebo admin." });
       return;
     }
 
     const noteIndex = notes.findIndex((item) => item.id === note.id);
     const [removed] = notes.splice(noteIndex, 1);
     io.emit("note:deleted", { id: removed.id });
-    addActivity(`${user.name} smazal/a lístek: "${textSnippet(removed.text)}" pro ${removed.to}`);
+    addActivity(`${user.name} smazal/a ticket: "${textSnippet(removed.text)}" pro ${removed.to}`);
     ack?.({ ok: true, id: removed.id });
   });
 

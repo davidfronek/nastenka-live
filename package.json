@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",
+    "dev:clean": "powershell -NoProfile -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force; node server.js\"",
     "start": "node server.js",
     "users:import": "node scripts/import-users.js"
   },

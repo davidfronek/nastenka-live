@@ -54,7 +54,7 @@
       <main class="workspace">
         <section class="tool-dock" aria-label="Nástroje nástěnky">
           <div class="dock-rail">
-            <button id="dock-toggle-note" class="dock-btn" type="button" aria-label="Nový lístek" data-hint="Nový lístek">
+            <button id="dock-toggle-note" class="dock-btn" type="button" aria-label="Nový ticket" data-hint="Nový ticket">
               <span class="dock-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
                   <path d="M11 5h2v14h-2z"></path>
@@ -81,14 +81,14 @@
 
           <div id="tool-dock-panel" class="tool-dock-panel hidden">
             <div id="dock-section-note" class="dock-section">
-              <h2 class="section-icon" aria-label="Nový lístek" title="Nový lístek">
+              <h2 class="section-icon" aria-label="Nový ticket" title="Nový ticket">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
                   <path d="M6 3h9l4 4v14H6zM8 5v14h9V8h-4V5z"></path>
                   <path d="M10 11h6v2h-6zm0 4h6v2h-6z"></path>
                 </svg>
               </h2>
               <div class="dock-section-head dock-theme-note">
-                <h3>Nový lístek</h3>
+                <h3>Nový ticket</h3>
                 <p>Vyplň zadání a rychle ho deleguj kolegovi.</p>
               </div>
               <div class="filters compact note-menu themed-panel themed-panel-note">
@@ -135,7 +135,7 @@
 
                   <label class="checkbox-field">
                     <input id="note-is-delegated" type="checkbox" />
-                    <span>Delegovaný lístek?</span>
+                    <span>Delegovaný ticket</span>
                   </label>
 
                   <label id="note-to-user-wrap" class="hidden">
@@ -163,7 +163,7 @@
                     <div class="palette" id="palette"></div>
                   </label>
 
-                  <button type="submit">Přidat lístek</button>
+                  <button type="submit">Přidat ticket</button>
                 </form>
               </div>
             </div>
@@ -239,13 +239,13 @@
               <div id="board-quick-create" class="board-quick-create hidden" role="dialog" aria-label="Rychlé vytvoření na ploše">
                 <p class="board-quick-title">Co chceš přidat?</p>
                 <div class="board-quick-actions">
-                  <button id="board-quick-create-note" type="button">Lístek</button>
+                  <button id="board-quick-create-note" type="button">ticket</button>
                   <button id="board-quick-create-text" class="secondary-btn" type="button">Čistý text</button>
                 </div>
               </div>
 
               <form id="board-inline-composer" class="board-inline-composer note-form control-card note-form-card hidden" autocomplete="off">
-                <p id="board-inline-title" class="board-inline-title">Nový lístek</p>
+                <p id="board-inline-title" class="board-inline-title">Nový ticket</p>
                 <p id="board-inline-control-title" class="control-title">Obsah a delegace</p>
                 <div class="rich-editor-shell">
                   <div class="editor-tools">
@@ -293,7 +293,7 @@
 
                   <label class="checkbox-field">
                     <input id="board-inline-is-delegated" type="checkbox" />
-                    <span>Delegovaný lístek?</span>
+                    <span>Delegovaný ticket</span>
                   </label>
 
                   <label id="board-inline-to-user-wrap" class="hidden">
@@ -362,7 +362,7 @@
 
     <template id="note-template">
       <article class="sticky" draggable="false">
-        <button class="pin" type="button" aria-label="Připnout lístek"></button>
+        <button class="pin" type="button" aria-label="Připnout ticket"></button>
         <p class="sticky-text"></p>
         <div class="meta-row delegation"></div>
         <div class="meta-row details"></div>
@@ -387,7 +387,7 @@
           <div id="note-preview-delegation" class="meta-row"></div>
           <div id="note-preview-details" class="meta-row"></div>
           <div class="note-preview-actions">
-            <button id="note-preview-edit-btn" type="button">Upravit lístek</button>
+            <button id="note-preview-edit-btn" type="button">Upravit ticket</button>
           </div>
         </div>
 
@@ -432,7 +432,7 @@
 
           <label class="checkbox-field">
             <input id="note-preview-edit-is-delegated" type="checkbox" />
-            <span>Delegovaný lístek?</span>
+            <span>Delegovaný ticket</span>
           </label>
 
           <label id="note-preview-edit-to-wrap" class="hidden">

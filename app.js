@@ -226,7 +226,7 @@ let boardQuickCreateDraftPosition = null;
 let previewEditSelectedColor = noteColors[0];
 let pendingPreviewUpdateTimer = null;
 
-const NOTE_FORM_TITLE = "Nový lístek";
+const NOTE_FORM_TITLE = "Nový ticket";
 const NOTE_FORM_CONTROL_TITLE = "Obsah a delegace";
 const NOTE_FORM_TEXT_PLACEHOLDER = "Například: Finální kontrola textu a předání klientovi";
 const BOARD_TEXT_TITLE = "Čistý text";
@@ -1730,7 +1730,7 @@ function requestNoteRestore(note) {
       setBoardActionStatus(response?.message || "Obnovení lístku se nepodařilo.", true);
       return;
     }
-    setBoardActionStatus("Lístek byl vrácen zpět na plochu.");
+    setBoardActionStatus("ticket byl vrácen zpět na plochu.");
   });
 }
 
@@ -2576,7 +2576,7 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
   applyToolbarFormatToEditor(boardInlineText, boardInlineFormatToolbar);
   renderBoardInlinePalette();
   if (boardInlineSubmit) {
-    boardInlineSubmit.textContent = boardInlineCreateMode === "note" ? "Přidat lístek" : "Přidat text";
+    boardInlineSubmit.textContent = boardInlineCreateMode === "note" ? "Přidat ticket" : "Přidat text";
   }
   boardInlineText.focus();
 }
@@ -3130,10 +3130,10 @@ function createStickyElement(note) {
     doneToggle.addEventListener("click", () => {
       const waitsForSourceResolution = isActiveNote(note) && Boolean(sanitizeLinkedSourceNoteId(note.linkedSourceNoteId));
       openConfirmModal({
-        title: "Přesunout lístek do vyřešených?",
+        title: "Přesunout ticket do vyřešených?",
         message: waitsForSourceResolution
-          ? `Lístek \"${getNoteSummary(note, 64)}\" bude označen jako vyřešený, ale zůstane na ploše, dokud nebude vyřešen i navázaný lístek zadavatele.`
-          : `Lístek \"${getNoteSummary(note, 64)}\" se přesune mimo plochu do archivu vyřešených.`,
+          ? `ticket \"${getNoteSummary(note, 64)}\" bude označen jako vyřešený, ale zůstane na ploše, dokud nebude vyřešen i navázaný ticket zadavatele.`
+          : `ticket \"${getNoteSummary(note, 64)}\" se přesune mimo plochu do archivu vyřešených.`,
         confirmLabel: "Přesunout do vyřešených",
         onConfirm: () => {
           socket.emit("note:toggle", { id: note.id }, (response) => {
@@ -3143,8 +3143,8 @@ function createStickyElement(note) {
             }
             setBoardActionStatus(
               waitsForSourceResolution
-                ? "Lístek byl označen jako vyřešený a zůstává na ploše do vyřešení zadání."
-                : "Lístek byl přesunut do vyřešených."
+                ? "ticket byl označen jako vyřešený a zůstává na ploše do vyřešení zadání."
+                : "ticket byl přesunut do vyřešených."
             );
           });
         }
@@ -3157,9 +3157,9 @@ function createStickyElement(note) {
     event.stopPropagation();
 
     openConfirmModal({
-      title: "Smazat lístek?",
-      message: `Lístek \"${getNoteSummary(note, 64)}\" se trvale smaže z plochy.`,
-      confirmLabel: "Smazat lístek",
+      title: "Smazat ticket?",
+      message: `ticket \"${getNoteSummary(note, 64)}\" se trvale smaže z plochy.`,
+      confirmLabel: "Smazat ticket",
       confirmTone: "danger",
       onConfirm: () => {
         socket.emit("note:delete", { id: note.id }, (response) => {
@@ -3167,7 +3167,7 @@ function createStickyElement(note) {
             setBoardActionStatus(response.message, true);
             return;
           }
-          setBoardActionStatus("Lístek byl smazán.");
+          setBoardActionStatus("ticket byl smazán.");
         });
       }
     });
@@ -3514,12 +3514,12 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
 
   const note = getActivePreviewNote();
   if (!note) {
-    setPreviewEditStatus("Lístek už neexistuje.", true);
+    setPreviewEditStatus("ticket už neexistuje.", true);
     return;
   }
 
   if (!canEditNote(note)) {
-    setPreviewEditStatus("Tento lístek může upravit jen autor nebo admin.", true);
+    setPreviewEditStatus("Tento ticket může upravit jen autor nebo admin.", true);
     return;
   }
 
@@ -3560,7 +3560,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
         return;
       }
 
-      setPreviewEditStatus("Lístek byl upraven.");
+      setPreviewEditStatus("ticket byl upraven.");
       closeNotePreview();
     }
   );
@@ -3881,7 +3881,7 @@ deleteAllBtn?.addEventListener("click", () => {
 
   const activeCount = notes.filter((note) => isActiveNote(note)).length;
   if (activeCount === 0) {
-    setBoardActionStatus("Na ploše není žádný aktivní lístek.");
+    setBoardActionStatus("Na ploše není žádný aktivní ticket.");
     return;
   }
 
@@ -3898,7 +3898,7 @@ deleteAllBtn?.addEventListener("click", () => {
         }
 
         if (response?.removedCount === 0) {
-          setBoardActionStatus("Na ploše není žádný aktivní lístek.");
+          setBoardActionStatus("Na ploše není žádný aktivní ticket.");
           return;
         }
 
@@ -4590,7 +4590,7 @@ socket.on("note:deleted", ({ id }) => {
   }
 
   removeRenderedBoardItem(`.sticky[data-id="${id}"]`);
-  setBoardActionStatus("Lístek byl smazán.");
+  setBoardActionStatus("ticket byl smazán.");
 });
 
 socket.on("notes:cleared", ({ removedCount }) => {
