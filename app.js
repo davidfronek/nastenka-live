@@ -187,6 +187,11 @@ const confirmModalTitle = document.querySelector("#confirm-modal-title");
 const confirmModalMessage = document.querySelector("#confirm-modal-message");
 const confirmModalCancel = document.querySelector("#confirm-modal-cancel");
 const confirmModalConfirm = document.querySelector("#confirm-modal-confirm");
+const selectionContextMenu = document.querySelector("#selection-context-menu");
+const selectionContextSummary = document.querySelector("#selection-context-summary");
+const selectionContextEdit = document.querySelector("#selection-context-edit");
+const selectionContextDone = document.querySelector("#selection-context-done");
+const selectionContextDelete = document.querySelector("#selection-context-delete");
 const toolDock = document.querySelector(".tool-dock");
 const toolDockPanel = document.querySelector("#tool-dock-panel");
 const dockToggleNote = document.querySelector("#dock-toggle-note");
@@ -1915,16 +1920,16 @@ function runPendingConfirmAction() {
   action?.();
 }
 
-function isMyNote(_note) {
-  return true;
+function isMyNote(note) {
+  return Boolean(me?.name && note?.from === me.name);
 }
 
 function isAssignedToMe(_note) {
   return true;
 }
 
-function canEditNote(_note) {
-  return true;
+function canEditNote(note) {
+  return isMyNote(note);
 }
 
 function canToggleNote(_note) {
@@ -1937,6 +1942,35 @@ function canMoveNote(_note) {
 
 function getSelectedMovableNotes() {
   return notes.filter((note) => selectedNoteIds.has(note.id) && isActiveNote(note) && canMoveNote(note));
+}
+
+function getSelectedOwnedNotes() {
+  return notes.filter((note) => selectedNoteIds.has(note.id) && isActiveNote(note) && isMyNote(note));
+}
+
+function closeSelectionContextMenu() {
+  selectionContextMenu?.classList.add("hidden");
+}
+
+function openSelectionContextMenu(event) {
+  const ownedNotes = getSelectedOwnedNotes();
+  if (!selectionContextMenu || selectedNoteIds.size === 0) {
+    return;
+  }
+
+  event.preventDefault();
+  selectionContextSummary.textContent = ownedNotes.length === 0
+    ? "Ve výběru nemáš vlastní ticket."
+    : `Vlastní tickety ve výběru: ${ownedNotes.length}`;
+  selectionContextEdit.disabled = ownedNotes.length !== 1;
+  selectionContextDone.disabled = ownedNotes.length === 0;
+  selectionContextDelete.disabled = ownedNotes.length === 0;
+  selectionContextMenu.classList.remove("hidden");
+
+  const menuWidth = selectionContextMenu.offsetWidth;
+  const menuHeight = selectionContextMenu.offsetHeight;
+  selectionContextMenu.style.left = `${Math.min(event.clientX, window.innerWidth - menuWidth - 8)}px`;
+  selectionContextMenu.style.top = `${Math.min(event.clientY, window.innerHeight - menuHeight - 8)}px`;
 }
 
 function clearSelection() {
@@ -1954,10 +1988,10 @@ function deleteSelectedNotes() {
 
   const ids = Array.from(selectedNoteIds).filter((id) => {
     const note = notes.find((item) => item.id === id);
-    return note && isActiveNote(note);
+    return note && isActiveNote(note) && isMyNote(note);
   });
   if (ids.length === 0) {
-    setBoardActionStatus("Nejdřív označ aktivní lístky ke smazání.");
+    setBoardActionStatus("Nejdřív označ vlastní aktivní lístky ke smazání.");
     return;
   }
 
@@ -2001,9 +2035,9 @@ function markSelectedNotesDone() {
     return;
   }
 
-  const ids = Array.from(selectedNoteIds);
+  const ids = getSelectedOwnedNotes().map((note) => note.id);
   if (ids.length === 0) {
-    setBoardActionStatus("Nejdřív označ lístky.");
+    setBoardActionStatus("Nejdřív označ vlastní lístky.");
     return;
   }
 
@@ -2918,60 +2952,39 @@ function updateSelectionRectVisual() {
   }
 
   ensureSelectionRect();
-  const ids = Array.from(selectedNoteIds).filter((id) => {
-    const note = notes.find((item) => item.id === id);
-    return note && isActiveNote(note);
-  });
-    return;
-    setBoardActionStatus("Nejdřív označ aktivní lístky.");
-
   const left = Math.min(selectionStart.x, selectionCurrent.x);
   const top = Math.min(selectionStart.y, selectionCurrent.y);
-  openConfirmModal({
-    title: "Přesunout vybrané lístky do vyřešených?",
-    message: `Vybrané lístky (${ids.length}) se přesunou mimo plochu do archivu vyřešených.`,
-    confirmLabel: "Přesunout do vyřešených",
-    onConfirm: () => {
-      socket.emit("note:markManyDone", { ids }, (response) => {
-        if (!response?.ok) {
-          setBoardActionStatus(response?.message || "Přesun vybraných lístků do vyřešených se nepodařil.", true);
-          return;
-        }
+  selectionRectEl.style.left = `${left}px`;
+  selectionRectEl.style.top = `${top}px`;
+  selectionRectEl.style.width = `${Math.abs(selectionCurrent.x - selectionStart.x)}px`;
+  selectionRectEl.style.height = `${Math.abs(selectionCurrent.y - selectionStart.y)}px`;
+  selectionRectEl.classList.remove("hidden");
+}
 
-        const updatedCount = Number(response?.updatedCount || 0);
-        const deniedCount = Number(response?.deniedCount || 0);
-        const alreadyDoneCount = Number(response?.alreadyDoneCount || 0);
+function updateSelectedNotesByArea() {
+  if (!selectionStart || !selectionCurrent) {
+    return;
+  }
 
-        if (updatedCount === 0) {
-          if (deniedCount > 0) {
-            setBoardActionStatus("Vybrané lístky nemůžeš přesunout do vyřešených.", true);
-            return;
-          }
+  const left = Math.min(selectionStart.x, selectionCurrent.x);
+  const right = Math.max(selectionStart.x, selectionCurrent.x);
+  const top = Math.min(selectionStart.y, selectionCurrent.y);
+  const bottom = Math.max(selectionStart.y, selectionCurrent.y);
+  const scale = getNoteScale();
 
-          if (alreadyDoneCount > 0) {
-            setBoardActionStatus("Vybrané lístky už jsou mimo plochu ve vyřešených.");
-            return;
-          }
+  selectedNoteIds = new Set(
+    getVisibleNotes()
+      .filter((note) => {
+        const bounds = getNoteBounds(note);
+        const noteRight = note.x + bounds.width * scale;
+        const noteBottom = note.y + bounds.height * scale;
+        return note.x <= right && noteRight >= left && note.y <= bottom && noteBottom >= top;
+      })
+      .map((note) => note.id)
+  );
 
-          setBoardActionStatus("Vybrané lístky už nejsou aktivní.");
-          return;
-        }
-
-        const details = [];
-        if (alreadyDoneCount > 0) {
-          details.push(`už vyřešené: ${alreadyDoneCount}`);
-        }
-        if (deniedCount > 0) {
-          details.push(`přeskočeno: ${deniedCount}`);
-        }
-
-        setBoardActionStatus(
-          details.length > 0
-            ? `Přesunuto do vyřešených: ${updatedCount} (${details.join(", ")}).`
-            : `Přesunuto do vyřešených: ${updatedCount}.`
-        );
-      });
-    }
+  boardCanvas.querySelectorAll(".sticky").forEach((stickyEl) => {
+    stickyEl.classList.toggle("selected", selectedNoteIds.has(stickyEl.dataset.id));
   });
 }
 
@@ -3449,6 +3462,10 @@ boardCanvas?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
 });
 
+boardCanvas?.addEventListener("contextmenu", (event) => {
+  openSelectionContextMenu(event);
+});
+
 assigneeFilter.addEventListener("change", renderBoard);
 
 toUser?.addEventListener("change", renderDelegatedSourceSelects);
@@ -3573,6 +3590,7 @@ document.addEventListener("keydown", (event) => {
     (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 
   if (event.key === "Escape") {
+    closeSelectionContextMenu();
     closeNotePreview();
     closeDockPanel();
     closeBoardQuickCreate();
@@ -3693,6 +3711,21 @@ document.addEventListener("pointerdown", (event) => {
 
   if (!boardQuickCreate.contains(target)) {
     closeBoardQuickCreate();
+  }
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!selectionContextMenu || selectionContextMenu.classList.contains("hidden")) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+
+  if (!selectionContextMenu.contains(target)) {
+    closeSelectionContextMenu();
   }
 });
 
@@ -3914,6 +3947,27 @@ deleteSelectedBtn?.addEventListener("click", () => {
 
 markSelectedDoneBtn?.addEventListener("click", () => {
   markSelectedNotesDone();
+});
+
+selectionContextEdit?.addEventListener("click", () => {
+  const [note] = getSelectedOwnedNotes();
+  closeSelectionContextMenu();
+  if (!note || getSelectedOwnedNotes().length !== 1) {
+    return;
+  }
+
+  openNotePreview(note);
+  enterPreviewEditMode();
+});
+
+selectionContextDone?.addEventListener("click", () => {
+  closeSelectionContextMenu();
+  markSelectedNotesDone();
+});
+
+selectionContextDelete?.addEventListener("click", () => {
+  closeSelectionContextMenu();
+  deleteSelectedNotes();
 });
 
 document.addEventListener("pointermove", (event) => {

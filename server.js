@@ -242,7 +242,7 @@ function isAdmin(user) {
 }
 
 function canManageNote(_user, _note) {
-  return true;
+  return isAdmin(_user) || Boolean(_user?.name && _note?.from === _user.name);
 }
 
 function canToggleNote(_user, _note) {
@@ -1283,6 +1283,11 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (!canManageNote(user, note)) {
+      ack?.({ ok: false, message: "Tento ticket může upravit jen jeho autor nebo admin." });
+      return;
+    }
+
     const text = sanitizeRichText(payload?.text);
     if (!text) {
       ack?.({ ok: false, message: "Doplň text lístku." });
@@ -1358,10 +1363,16 @@ io.on("connection", (socket) => {
     }
 
     let removedCount = 0;
+    let deniedCount = 0;
 
     uniqueIds.forEach((id) => {
       const noteIndex = notes.findIndex((item) => item.id === id);
       if (noteIndex === -1) {
+        return;
+      }
+
+      if (!canManageNote(user, notes[noteIndex])) {
+        deniedCount += 1;
         return;
       }
 
@@ -1374,7 +1385,7 @@ io.on("connection", (socket) => {
       addActivity(`${user.name} hromadně smazal/a vybrané lístky (${removedCount})`);
     }
 
-    ack?.({ ok: true, removedCount, deniedCount: 0 });
+    ack?.({ ok: true, removedCount, deniedCount });
   });
 
   socket.on("note:markManyDone", ({ ids }, ack) => {
@@ -1395,10 +1406,16 @@ io.on("connection", (socket) => {
 
     let updatedCount = 0;
     let alreadyDoneCount = 0;
+    let deniedCount = 0;
 
     uniqueIds.forEach((id) => {
       const note = notes.find((item) => item.id === id);
       if (!note) {
+        return;
+      }
+
+      if (!canManageNote(user, note)) {
+        deniedCount += 1;
         return;
       }
 
@@ -1421,7 +1438,7 @@ io.on("connection", (socket) => {
       addActivity(`${user.name} hromadně přesunul/a lístky do vyřešených (${updatedCount})`);
     }
 
-    ack?.({ ok: true, updatedCount, deniedCount: 0, alreadyDoneCount });
+    ack?.({ ok: true, updatedCount, deniedCount, alreadyDoneCount });
   });
 
   socket.on("note:deleteAll", (_payload, ack) => {

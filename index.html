@@ -508,6 +508,13 @@
       </article>
     </div>
 
+    <div id="selection-context-menu" class="selection-context-menu hidden" role="menu" aria-label="Akce pro vybrané tickety">
+      <p id="selection-context-summary" class="selection-context-summary"></p>
+      <button id="selection-context-edit" type="button" role="menuitem">Upravit ticket</button>
+      <button id="selection-context-done" type="button" role="menuitem">Označit jako vyřešené</button>
+      <button id="selection-context-delete" class="selection-context-delete" type="button" role="menuitem">Smazat tickety</button>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="./app.js" type="module"></script>
   </body>

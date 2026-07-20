@@ -1503,6 +1503,54 @@ button:focus-visible {
   pointer-events: none;
 }
 
+.selection-context-menu {
+  position: fixed;
+  z-index: 60;
+  width: 210px;
+  padding: 6px;
+  border: 1px solid rgba(31, 41, 55, 0.2);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(17, 24, 39, 0.2);
+}
+
+.selection-context-summary {
+  margin: 3px 5px 6px;
+  color: rgba(31, 41, 55, 0.72);
+  font-size: 0.76rem;
+}
+
+.selection-context-menu button {
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: #1f2937;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.selection-context-menu button:hover:not(:disabled),
+.selection-context-menu button:focus-visible:not(:disabled) {
+  background: rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.selection-context-menu button:disabled {
+  color: rgba(31, 41, 55, 0.38);
+  cursor: default;
+}
+
+.selection-context-menu .selection-context-delete:hover:not(:disabled),
+.selection-context-menu .selection-context-delete:focus-visible:not(:disabled) {
+  color: #991b1b;
+  background: rgba(220, 38, 38, 0.1);
+}
+
 .sticky {
   position: absolute;
   width: min(188px, calc(100% - 16px));
