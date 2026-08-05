@@ -70,10 +70,12 @@
                 </svg>
               </span>
             </button>
-            <button id="dock-toggle-actions" class="dock-btn" type="button" aria-label="Akce" data-hint="Akce">
+            <button id="connect-notes-btn" class="dock-btn" type="button" aria-label="Nakreslit spojnici" data-hint="Spojnice">
               <span class="dock-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                  <path d="M19.43 12.98a7.93 7.93 0 0 0 .05-.98 7.93 7.93 0 0 0-.05-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.28 7.28 0 0 0-1.7-.98l-.38-2.65A.5.5 0 0 0 14 1h-4a.5.5 0 0 0-.49.42L9.13 4.07c-.61.24-1.18.56-1.7.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65a7.93 7.93 0 0 0-.05.98c0 .33.02.66.05.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.42 1.09.74 1.7.98l.38 2.65A.5.5 0 0 0 10 23h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.24 1.18-.56 1.7-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"></path>
+                  <path d="M8.5 13.5l-2 2a3 3 0 0 0 4.24 4.24l2.12-2.12-1.41-1.41-2.12 2.12a1 1 0 1 1-1.41-1.41l2-2z"></path>
+                  <path d="M15.5 10.5l2-2a3 3 0 0 0-4.24-4.24l-2.12 2.12 1.41 1.41 2.12-2.12a1 1 0 1 1 1.41 1.41l-2 2z"></path>
+                  <path d="M8.5 16.91l-1.41-1.41 8.42-8.42 1.41 1.41z"></path>
                 </svg>
               </span>
             </button>
@@ -133,14 +135,9 @@
                     </label>
                   </div>
 
-                  <label class="checkbox-field">
-                    <input id="note-is-delegated" type="checkbox" />
-                    <span>Delegovaný ticket</span>
-                  </label>
-
-                  <label id="note-to-user-wrap" class="hidden">
-                    Řešitel
-                    <select id="to-user"></select>
+                  <label id="note-to-user-wrap">
+                    Řešitelé
+                    <select id="to-user" multiple size="4"></select>
                   </label>
 
                   <div class="inline-fields">
@@ -189,51 +186,10 @@
               </div>
             </div>
 
-            <div id="dock-section-actions" class="dock-section hidden">
-              <h2 class="section-icon" aria-label="Rychle akce" title="Rychle akce">
-                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                  <path d="M13 2L4 14h6l-1 8 9-12h-6z"></path>
-                </svg>
-              </h2>
-              <div class="dock-section-head dock-theme-actions">
-                <h3>Rychlé akce</h3>
-                <p>Správa výběru, uložení stavu a mazání.</p>
-              </div>
-              <div class="filters compact action-menu themed-panel themed-panel-actions">
-                <div class="action-group action-group-safe">
-                  <p class="control-title">Práce s výběrem</p>
-                  <button id="mark-selected-done-btn" class="secondary-btn action-btn" type="button">Označit vybrané jako vyřešené</button>
-                  <button id="save-session-btn" class="secondary-btn action-btn" type="button">Uložit snapshot</button>
-                </div>
-                <div class="action-group action-group-safe">
-                  <p class="control-title">Obnovení zálohy</p>
-                  <select id="restore-snapshot-select" aria-label="Vybrat snapshot k obnovení"></select>
-                  <button id="restore-snapshot-btn" class="secondary-btn action-btn" type="button">Obnovit snapshot</button>
-                </div>
-                <div class="action-group action-group-danger">
-                  <p class="control-title">Mazání</p>
-                  <button id="delete-selected-btn" class="danger-btn action-btn" type="button">Smazat vybrané</button>
-                  <button id="delete-all-btn" class="danger-btn action-btn" type="button">Vymazat vše</button>
-                </div>
-                <div class="action-status-stack">
-                  <p id="board-action-status" class="session-save-status" aria-live="polite"></p>
-                  <p id="session-save-status" class="session-save-status" aria-live="polite"></p>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
         <section class="board-zone">
-          <div class="board-side-tools">
-            <button id="archive-indicator" class="archive-indicator hidden" type="button" aria-label="Otevřít archiv lístků">
-              <span class="archive-indicator-label">Archiv lístků</span>
-              <span id="archive-indicator-total" class="archive-indicator-total">0</span>
-              <span class="archive-indicator-breakdown">
-                <span id="archive-indicator-done" class="archive-indicator-chip archive-indicator-chip-done">Vyřešené 0</span>
-              </span>
-            </button>
-          </div>
           <div id="board" class="board" aria-label="Kolaborativní plocha">
             <div id="board-canvas" class="board-canvas">
               <div id="board-quick-create" class="board-quick-create hidden" role="dialog" aria-label="Rychlé vytvoření na ploše">
@@ -291,14 +247,9 @@
                     </label>
                   </div>
 
-                  <label class="checkbox-field">
-                    <input id="board-inline-is-delegated" type="checkbox" />
-                    <span>Delegovaný ticket</span>
-                  </label>
-
-                  <label id="board-inline-to-user-wrap" class="hidden">
-                    Řešitel
-                    <select id="board-inline-to-user"></select>
+                  <label id="board-inline-to-user-wrap">
+                    Řešitelé
+                    <select id="board-inline-to-user" multiple size="4"></select>
                   </label>
 
                   <div class="inline-fields">
@@ -329,6 +280,7 @@
             </div>
 
             <div class="board-nav-hints" aria-live="polite">
+              <button id="done-position-text" class="done-position-text hidden" type="button" aria-label="Přejít k vyřešeným ticketům"></button>
               <button id="board-arrow-left" class="board-arrow board-arrow-left hidden" type="button" aria-label="Posunout plochu doleva">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
                   <path d="M14.7 5.3L8 12l6.7 6.7 1.4-1.4L10.8 12l5.3-5.3z"></path>
@@ -430,14 +382,9 @@
             </label>
           </div>
 
-          <label class="checkbox-field">
-            <input id="note-preview-edit-is-delegated" type="checkbox" />
-            <span>Delegovaný ticket</span>
-          </label>
-
-          <label id="note-preview-edit-to-wrap" class="hidden">
-            Řešitel
-            <select id="note-preview-edit-to"></select>
+          <label id="note-preview-edit-to-wrap">
+            Řešitelé
+            <select id="note-preview-edit-to" multiple size="4"></select>
           </label>
 
           <div class="inline-fields">
@@ -466,31 +413,6 @@
           </div>
           <p id="note-preview-edit-status" class="session-save-status" aria-live="polite"></p>
         </form>
-      </article>
-    </div>
-
-    <div id="note-archive" class="note-preview hidden" aria-hidden="true">
-      <div class="note-preview-backdrop" data-close-archive="true"></div>
-      <article class="note-preview-sheet note-archive-sheet">
-        <button id="note-archive-close" class="note-preview-close" type="button" aria-label="Zavřít archiv lístků">
-          <svg viewBox="0 0 24 24" role="presentation" focusable="false" aria-hidden="true">
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-          </svg>
-        </button>
-        <div class="note-archive-head">
-          <h2>Archiv lístků</h2>
-          <p id="note-archive-summary" class="note-archive-summary"></p>
-        </div>
-        <div class="note-archive-sections">
-          <section class="note-archive-section">
-            <div class="note-archive-section-head">
-              <h3>Vyřešené</h3>
-              <span id="note-archive-done-count" class="note-archive-count">0</span>
-            </div>
-            <div id="note-archive-done-list" class="note-archive-list"></div>
-          </section>
-        </div>
       </article>
     </div>
 

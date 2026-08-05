@@ -80,13 +80,15 @@ let canvasWidth = 2400;
 let canvasHeight = 1600;
 let snapEnabled = true;
 let notePreviewClosingTimer = null;
-let noteArchiveClosingTimer = null;
 let confirmModalClosingTimer = null;
 let activePreviewNoteId = null;
 let isPreviewEditing = false;
 let verticalGuideEl = null;
 let horizontalGuideEl = null;
 let noteConnectionsSvg = null;
+let noteConnections = [];
+let connectionMode = false;
+let connectionStartNoteId = null;
 let lastRichEditorSelection = null;
 let pendingInlineFormatSelection = null;
 let pendingConfirmAction = null;
@@ -94,14 +96,8 @@ let pendingConfirmAction = null;
 const GRID_MIN = 2;
 const GRID_MAX = 40;
 const GRID_STEP = 2;
-const CLIENT_DONE_OVAL_BASE_CENTER_X = 2400;
-const CLIENT_DONE_OVAL_CENTER_Y = 430;
-const CLIENT_DONE_OVAL_RADIUS_X = 320;
-const CLIENT_DONE_OVAL_RADIUS_Y = 220;
-const CLIENT_DONE_OVAL_POINTS_PER_RING = 14;
-const CLIENT_DONE_OVAL_RING_STEP_X = 170;
-const CLIENT_DONE_OVAL_RING_STEP_Y = 130;
-const CLIENT_DONE_ACTIVE_GAP_PX = 500;
+const DONE_STACK_X = 2400;
+const DONE_STACK_Y = 430;
 const NOTE_BASE_WIDTH = 206;
 const NOTE_DEFAULT_WIDTH = 188;
 const NOTE_DEFAULT_HEIGHT = 146;
@@ -128,9 +124,6 @@ const logoutBtn = document.querySelector("#logout-btn");
 
 const board = document.querySelector("#board");
 const boardCanvas = document.querySelector("#board-canvas") || board;
-const archiveIndicator = document.querySelector("#archive-indicator");
-const archiveIndicatorTotal = document.querySelector("#archive-indicator-total");
-const archiveIndicatorDone = document.querySelector("#archive-indicator-done");
 const noteTemplate = document.querySelector("#note-template");
 const noteForm = document.querySelector("#note-form");
 const noteText = document.querySelector("#note-text");
@@ -152,6 +145,7 @@ const assigneeFilter = document.querySelector("#assignee-filter");
 const activityList = document.querySelector("#activity-list");
 const deleteAllBtn = document.querySelector("#delete-all-btn");
 const deleteSelectedBtn = document.querySelector("#delete-selected-btn");
+const deleteDoneBtn = document.querySelector("#delete-done-btn");
 const markSelectedDoneBtn = document.querySelector("#mark-selected-done-btn");
 const saveSessionBtn = document.querySelector("#save-session-btn");
 const restoreSnapshotSelect = document.querySelector("#restore-snapshot-select");
@@ -177,11 +171,6 @@ const notePreviewEditColorPalette = document.querySelector("#note-preview-edit-c
 const notePreviewEditFormatToolbar = document.querySelector('[data-format-toolbar="preview-edit"]');
 const notePreviewCancelBtn = document.querySelector("#note-preview-cancel-btn");
 const notePreviewEditStatus = document.querySelector("#note-preview-edit-status");
-const noteArchive = document.querySelector("#note-archive");
-const noteArchiveClose = document.querySelector("#note-archive-close");
-const noteArchiveSummary = document.querySelector("#note-archive-summary");
-const noteArchiveDoneCount = document.querySelector("#note-archive-done-count");
-const noteArchiveDoneList = document.querySelector("#note-archive-done-list");
 const confirmModal = document.querySelector("#confirm-modal");
 const confirmModalTitle = document.querySelector("#confirm-modal-title");
 const confirmModalMessage = document.querySelector("#confirm-modal-message");
@@ -196,10 +185,9 @@ const toolDock = document.querySelector(".tool-dock");
 const toolDockPanel = document.querySelector("#tool-dock-panel");
 const dockToggleNote = document.querySelector("#dock-toggle-note");
 const dockToggleFilter = document.querySelector("#dock-toggle-filter");
-const dockToggleActions = document.querySelector("#dock-toggle-actions");
+const connectNotesBtn = document.querySelector("#connect-notes-btn");
 const dockSectionNote = document.querySelector("#dock-section-note");
 const dockSectionFilter = document.querySelector("#dock-section-filter");
-const dockSectionActions = document.querySelector("#dock-section-actions");
 const boardInlineComposer = document.querySelector("#board-inline-composer");
 const boardInlineTitle = document.querySelector("#board-inline-title");
 const boardInlineControlTitle = document.querySelector("#board-inline-control-title");
@@ -290,11 +278,7 @@ function isResolvedLinkedNoteWaitingForSource(note) {
 }
 
 function isNoteVisibleOnBoard(note) {
-  return isActiveNote(note) || isResolvedLinkedNoteWaitingForSource(note);
-}
-
-function isArchivedNote(note) {
-  return getNoteStatus(note) === "done" && !isResolvedLinkedNoteWaitingForSource(note);
+  return Boolean(note);
 }
 
 function formatNoteStatusLabel(note) {
@@ -907,7 +891,7 @@ function openNotePreview(note) {
 
   notePreviewText.innerHTML = richTextToDisplayHtml(note.text);
   applyNoteFormatToElement(notePreviewText, note.format);
-  notePreviewDelegation.textContent = `Autor: ${note.from} | Řešitel: ${note.to}`;
+  notePreviewDelegation.textContent = `Autor: ${note.from} | Řešitelé: ${note.to}`;
   notePreviewDetails.textContent = buildNoteDetailsText(note);
   notePreviewEditBtn?.classList.toggle("hidden", !canEditNote(note) || !isActiveNote(note));
   notePreviewView?.classList.remove("hidden");
@@ -987,16 +971,39 @@ function renderPreviewEditPalette() {
   });
 }
 
-function populatePreviewAssigneeSelect(selectedName) {
+function getNoteAssigneeNames(note) {
+  const values = Array.isArray(note?.toUsers) ? note.toUsers : String(note?.to || "").split(",");
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+}
+
+function getSelectedAssigneeNames(select) {
+  return Array.from(select?.selectedOptions || []).map((option) => option.value);
+}
+
+function setSelectedAssigneeNames(select, names) {
+  if (!select) {
+    return;
+  }
+  const selected = new Set(names.map((name) => String(name).toLowerCase()));
+  Array.from(select.options).forEach((option) => {
+    option.selected = selected.has(option.value.toLowerCase());
+  });
+}
+
+function populatePreviewAssigneeSelect(selectedNames) {
   if (!notePreviewEditTo) {
     return;
   }
 
   const names = getAssignableNames();
-  const cleanSelected = String(selectedName || "").trim();
-  if (cleanSelected && !names.some((name) => name.toLowerCase() === cleanSelected.toLowerCase())) {
-    names.push(cleanSelected);
-  }
+  const cleanSelected = (Array.isArray(selectedNames) ? selectedNames : [selectedNames])
+    .map((name) => String(name || "").trim())
+    .filter(Boolean);
+  cleanSelected.forEach((selectedName) => {
+    if (!names.some((name) => name.toLowerCase() === selectedName.toLowerCase())) {
+      names.push(selectedName);
+    }
+  });
 
   notePreviewEditTo.innerHTML = "";
   names.forEach((name) => {
@@ -1006,9 +1013,7 @@ function populatePreviewAssigneeSelect(selectedName) {
     notePreviewEditTo.append(option);
   });
 
-  if (cleanSelected && names.includes(cleanSelected)) {
-    notePreviewEditTo.value = cleanSelected;
-  }
+  setSelectedAssigneeNames(notePreviewEditTo, cleanSelected);
 }
 
 function refreshOpenPreview() {
@@ -1036,8 +1041,7 @@ function refreshOpenPreview() {
   if (isPreviewEditing) {
     setRichEditor(notePreviewEditText, note.text);
     setAuthorFieldValue(notePreviewEditFrom, note.from);
-    populatePreviewAssigneeSelect(note.to);
-    notePreviewEditIsDelegated.checked = Boolean(note?.isDelegated);
+    populatePreviewAssigneeSelect(getNoteAssigneeNames(note));
     renderDelegatedSourceSelects();
     notePreviewEditPriority.value = ["Nizka", "Stredni", "Vysoka"].includes(note.priority)
       ? note.priority
@@ -1059,8 +1063,7 @@ function enterPreviewEditMode() {
   isPreviewEditing = true;
   setRichEditor(notePreviewEditText, note.text);
   setAuthorFieldValue(notePreviewEditFrom, note.from);
-  populatePreviewAssigneeSelect(note.to);
-  notePreviewEditIsDelegated.checked = Boolean(note?.isDelegated);
+  populatePreviewAssigneeSelect(getNoteAssigneeNames(note));
   renderDelegatedSourceSelects();
   notePreviewEditPriority.value = ["Nizka", "Stredni", "Vysoka"].includes(note.priority)
     ? note.priority
@@ -1107,7 +1110,6 @@ function closeDockPanel() {
   setCreationControlsVisibility(false);
   dockToggleNote?.classList.remove("active");
   dockToggleFilter?.classList.remove("active");
-  dockToggleActions?.classList.remove("active");
 }
 
 function openDockSection(section) {
@@ -1118,8 +1120,7 @@ function openDockSection(section) {
   const isAlreadyOpen = !toolDockPanel.classList.contains("hidden");
   const activeBtn =
     (dockToggleNote?.classList.contains("active") && "note") ||
-    (dockToggleFilter?.classList.contains("active") && "filter") ||
-    (dockToggleActions?.classList.contains("active") && "actions");
+    (dockToggleFilter?.classList.contains("active") && "filter");
 
   if (isAlreadyOpen && activeBtn === section) {
     closeDockPanel();
@@ -1129,11 +1130,9 @@ function openDockSection(section) {
   toolDockPanel.classList.remove("hidden");
   dockSectionNote?.classList.toggle("hidden", section !== "note");
   dockSectionFilter?.classList.toggle("hidden", section !== "filter");
-  dockSectionActions?.classList.toggle("hidden", section !== "actions");
 
   dockToggleNote?.classList.toggle("active", section === "note");
   dockToggleFilter?.classList.toggle("active", section === "filter");
-  dockToggleActions?.classList.toggle("active", section === "actions");
   setCreationControlsVisibility(section === "note");
 }
 
@@ -1162,7 +1161,9 @@ function logoutLocally() {
   loginEmail.value = "";
   loginEmailWrap?.classList.remove("hidden");
   clearRichEditor(noteText);
-  sessionSaveStatus.textContent = "";
+  if (sessionSaveStatus) {
+    sessionSaveStatus.textContent = "";
+  }
   setBoardActionStatus("");
   clearStoredSessionToken();
 }
@@ -1234,7 +1235,10 @@ function normalizeIncomingNote(next) {
     isDelegated: Boolean(next.isDelegated || sanitizeLinkedSourceNoteId(next.linkedSourceNoteId)),
     linkedSourceNoteId: sanitizeLinkedSourceNoteId(next.linkedSourceNoteId),
     from: String(next.from || ""),
-    to: String(next.to || ""),
+    toUsers: Array.from(new Set((Array.isArray(next.toUsers) ? next.toUsers : String(next.to || "").split(","))
+      .map((name) => String(name || "").trim())
+      .filter(Boolean))),
+    to: String(next.to || (Array.isArray(next.toUsers) ? next.toUsers.join(", ") : "")),
     priority: typeof next.priority === "string" && next.priority ? next.priority : "Stredni",
     deadline: typeof next.deadline === "string" ? next.deadline : "",
     color: typeof next.color === "string" && next.color ? next.color : noteColors[0],
@@ -1415,8 +1419,8 @@ async function loadSnapshotOptions() {
 }
 
 function renderUserSelects() {
-  const previousTo = toUser.value;
-  const previousBoardInlineTo = boardInlineToUser?.value || "";
+  const previousTo = getSelectedAssigneeNames(toUser);
+  const previousBoardInlineTo = getSelectedAssigneeNames(boardInlineToUser);
   const previousFilter = assigneeFilter.value;
   const assignableNames = getAssignableNames();
 
@@ -1430,13 +1434,7 @@ function renderUserSelects() {
     toUser.append(option);
   });
 
-  if (previousTo && assignableNames.includes(previousTo)) {
-    toUser.value = previousTo;
-  } else if (me) {
-    toUser.value = me.name;
-  } else if (assignableNames.length > 0) {
-    toUser.value = assignableNames[0];
-  }
+  setSelectedAssigneeNames(toUser, previousTo.length ? previousTo : [me?.name || assignableNames[0]]);
 
   if (boardInlineToUser) {
     setAuthorFieldValue(boardInlineFromUser, me?.name || "");
@@ -1448,15 +1446,7 @@ function renderUserSelects() {
       boardInlineToUser.append(option);
     });
 
-    if (previousBoardInlineTo && assignableNames.includes(previousBoardInlineTo)) {
-      boardInlineToUser.value = previousBoardInlineTo;
-    } else if (toUser.value && assignableNames.includes(toUser.value)) {
-      boardInlineToUser.value = toUser.value;
-    } else if (me) {
-      boardInlineToUser.value = me.name;
-    } else if (assignableNames.length > 0) {
-      boardInlineToUser.value = assignableNames[0];
-    }
+    setSelectedAssigneeNames(boardInlineToUser, previousBoardInlineTo.length ? previousBoardInlineTo : getSelectedAssigneeNames(toUser));
   }
 
   assigneeFilter.innerHTML = "";
@@ -1515,16 +1505,8 @@ function renderActivity(items) {
 }
 
 function setBoardActionStatus(message, isError = false) {
-  boardActionStatus.textContent = message;
-  boardActionStatus.classList.toggle("is-error", isError);
-}
-
-function getDoneNotes() {
-  return notes.filter((note) => isArchivedNote(note));
-}
-
-function getArchivedNotes() {
-  return getDoneNotes();
+  boardActionStatus?.replaceChildren(document.createTextNode(message));
+  boardActionStatus?.classList.toggle("is-error", isError);
 }
 
 function getLinkedSourceDirectionLabel(note) {
@@ -1693,6 +1675,58 @@ function renderNoteConnections() {
 
     overlay.append(connectionGroup);
   });
+
+  noteConnections.forEach((connection) => {
+    const sourceNote = visibleNotesById.get(connection.fromId);
+    const targetNote = visibleNotesById.get(connection.toId);
+    if (!sourceNote || !targetNote || sourceNote.id === targetNote.id) {
+      return;
+    }
+
+    const sourceCenter = getNoteConnectionCenter(sourceNote);
+    const targetCenter = getNoteConnectionCenter(targetNote);
+    const start = getNoteConnectionAnchor(sourceNote, targetCenter.x, targetCenter.y);
+    const end = getNoteConnectionAnchor(targetNote, sourceCenter.x, sourceCenter.y);
+    const connectionGroup = document.createElementNS(SVG_NS, "g");
+    connectionGroup.classList.add("board-connection", "board-connection-custom");
+    const connectionLine = document.createElementNS(SVG_NS, "line");
+    connectionLine.classList.add("board-connection-line");
+    connectionLine.setAttribute("x1", String(start.x));
+    connectionLine.setAttribute("y1", String(start.y));
+    connectionLine.setAttribute("x2", String(end.x));
+    connectionLine.setAttribute("y2", String(end.y));
+    connectionLine.setAttribute("marker-end", "url(#note-connection-arrow)");
+    connectionGroup.append(connectionLine);
+    overlay.append(connectionGroup);
+  });
+}
+
+function setConnectionMode(enabled) {
+  connectionMode = enabled;
+  connectionStartNoteId = null;
+  connectNotesBtn?.classList.toggle("active", enabled);
+  board?.classList.toggle("connection-mode", enabled);
+  setBoardActionStatus(enabled ? "Spojnice: klikni na první a potom na druhý ticket." : "");
+}
+
+function handleConnectionNoteClick(note) {
+  if (!connectionMode) {
+    return;
+  }
+  if (!connectionStartNoteId) {
+    connectionStartNoteId = note.id;
+    setBoardActionStatus("První ticket vybrán. Klikni na ticket, který chceš propojit.");
+    return;
+  }
+  const fromId = connectionStartNoteId;
+  connectionStartNoteId = null;
+  socket.emit("connection:create", { fromId, toId: note.id }, (response) => {
+    if (!response?.ok) {
+      setBoardActionStatus(response?.message || "Spojnici se nepodařilo vytvořit.", true);
+      return;
+    }
+    setBoardActionStatus(response.existing ? "Tato spojnice už existuje." : "Spojnice vytvořena.");
+  });
 }
 
 function getNoteSummary(note, maxLength = 80) {
@@ -1704,164 +1738,6 @@ function getNoteSummary(note, maxLength = 80) {
     return plain;
   }
   return `${plain.slice(0, maxLength - 1)}...`;
-}
-
-function renderArchiveIndicator() {
-  if (!archiveIndicator || !archiveIndicatorTotal || !archiveIndicatorDone) {
-    return;
-  }
-
-  const doneCount = getDoneNotes().length;
-
-  archiveIndicator.classList.toggle("hidden", doneCount === 0);
-  archiveIndicatorTotal.textContent = String(doneCount);
-  archiveIndicatorDone.textContent = `Vyřešené ${doneCount}`;
-}
-
-function createArchiveEmptyState(message) {
-  const empty = document.createElement("div");
-  empty.className = "note-archive-empty";
-  empty.textContent = message;
-  return empty;
-}
-
-function requestNoteRestore(note) {
-  if (!note?.id) {
-    return;
-  }
-
-  socket.emit("note:toggle", { id: note.id }, (response) => {
-    if (!response?.ok) {
-      setBoardActionStatus(response?.message || "Obnovení lístku se nepodařilo.", true);
-      return;
-    }
-    setBoardActionStatus("ticket byl vrácen zpět na plochu.");
-  });
-}
-
-function createArchiveNoteCard(note, status) {
-  const card = document.createElement("article");
-  card.className = `note-archive-card note-archive-card-${status}`;
-
-  const top = document.createElement("div");
-  top.className = "note-archive-card-top";
-
-  const meta = document.createElement("div");
-  meta.className = "note-archive-meta";
-  const delegation = document.createElement("div");
-  delegation.textContent = `Autor: ${note.from} | Řešitel: ${note.to}`;
-  const details = document.createElement("div");
-  details.textContent = `Priorita: ${formatPriorityLabel(note.priority)}${note.deadline ? ` | Termín: ${note.deadline}` : ""}`;
-  meta.append(delegation, details);
-
-  const state = document.createElement("span");
-  state.className = `note-archive-state note-archive-state-${status}`;
-  state.textContent = formatNoteStatusLabel(note);
-  top.append(meta, state);
-
-  const text = document.createElement("p");
-  text.className = "note-archive-text";
-  text.innerHTML = richTextToDisplayHtml(note.text);
-  applyNoteFormatToElement(text, note.format);
-
-  const actions = document.createElement("div");
-  actions.className = "note-archive-actions";
-  const restoreBtn = document.createElement("button");
-  restoreBtn.type = "button";
-  restoreBtn.className = "secondary-btn";
-  restoreBtn.textContent = "Vrátit na plochu";
-  restoreBtn.addEventListener("click", () => {
-    requestNoteRestore(note);
-  });
-  actions.append(restoreBtn);
-
-  card.append(top, text, actions);
-  return card;
-}
-
-function renderArchiveList(target, items, status, emptyMessage) {
-  if (!target) {
-    return;
-  }
-
-  target.innerHTML = "";
-  if (items.length === 0) {
-    target.append(createArchiveEmptyState(emptyMessage));
-    return;
-  }
-
-  items
-    .slice()
-    .reverse()
-    .forEach((note) => {
-      target.append(createArchiveNoteCard(note, status));
-    });
-}
-
-function renderNoteArchive() {
-  if (!noteArchiveDoneList) {
-    return;
-  }
-
-  const doneNotes = getDoneNotes();
-
-  if (noteArchiveSummary) {
-    noteArchiveSummary.textContent = `Mimo plochu je ${doneNotes.length} vyřešených lístků.`;
-  }
-  if (noteArchiveDoneCount) {
-    noteArchiveDoneCount.textContent = String(doneNotes.length);
-  }
-
-  renderArchiveList(noteArchiveDoneList, doneNotes, "done", "Zatím tu nejsou žádné vyřešené lístky.");
-}
-
-function refreshArchivedNotesUi() {
-  renderArchiveIndicator();
-  if (noteArchive && !noteArchive.classList.contains("hidden")) {
-    renderNoteArchive();
-  }
-}
-
-function openNoteArchive() {
-  if (!noteArchive) {
-    return;
-  }
-
-  if (noteArchiveClosingTimer) {
-    clearTimeout(noteArchiveClosingTimer);
-    noteArchiveClosingTimer = null;
-  }
-
-  renderNoteArchive();
-  noteArchive.classList.remove("hidden");
-  requestAnimationFrame(() => {
-    noteArchive.classList.add("open");
-  });
-  noteArchive.setAttribute("aria-hidden", "false");
-}
-
-function closeNoteArchive(immediate = false) {
-  if (!noteArchive) {
-    return;
-  }
-
-  noteArchive.classList.remove("open");
-  noteArchive.setAttribute("aria-hidden", "true");
-
-  if (noteArchiveClosingTimer) {
-    clearTimeout(noteArchiveClosingTimer);
-    noteArchiveClosingTimer = null;
-  }
-
-  if (immediate) {
-    noteArchive.classList.add("hidden");
-    return;
-  }
-
-  noteArchiveClosingTimer = window.setTimeout(() => {
-    noteArchive.classList.add("hidden");
-    noteArchiveClosingTimer = null;
-  }, PREVIEW_ANIMATION_MS);
 }
 
 function openConfirmModal({ title, message, confirmLabel, confirmTone = "default", onConfirm }) {
@@ -1948,12 +1824,17 @@ function getSelectedOwnedNotes() {
   return notes.filter((note) => selectedNoteIds.has(note.id) && isActiveNote(note) && isMyNote(note));
 }
 
+function getSelectedDeletableNotes() {
+  return notes.filter((note) => selectedNoteIds.has(note.id) && (getNoteStatus(note) === "done" || (isActiveNote(note) && isMyNote(note))));
+}
+
 function closeSelectionContextMenu() {
   selectionContextMenu?.classList.add("hidden");
 }
 
 function openSelectionContextMenu(event) {
   const ownedNotes = getSelectedOwnedNotes();
+  const deletableNotes = getSelectedDeletableNotes();
   if (!selectionContextMenu || selectedNoteIds.size === 0) {
     return;
   }
@@ -1964,7 +1845,7 @@ function openSelectionContextMenu(event) {
     : `Vlastní tickety ve výběru: ${ownedNotes.length}`;
   selectionContextEdit.disabled = ownedNotes.length !== 1;
   selectionContextDone.disabled = ownedNotes.length === 0;
-  selectionContextDelete.disabled = ownedNotes.length === 0;
+  selectionContextDelete.disabled = deletableNotes.length === 0;
   selectionContextMenu.classList.remove("hidden");
 
   const menuWidth = selectionContextMenu.offsetWidth;
@@ -1986,18 +1867,15 @@ function deleteSelectedNotes() {
     return;
   }
 
-  const ids = Array.from(selectedNoteIds).filter((id) => {
-    const note = notes.find((item) => item.id === id);
-    return note && isActiveNote(note) && isMyNote(note);
-  });
+  const ids = getSelectedDeletableNotes().map((note) => note.id);
   if (ids.length === 0) {
-    setBoardActionStatus("Nejdřív označ vlastní aktivní lístky ke smazání.");
+    setBoardActionStatus("Nejdřív označ tickety ke smazání.");
     return;
   }
 
   openConfirmModal({
     title: "Smazat vybrané lístky?",
-    message: `Vybrané lístky (${ids.length}) se trvale smažou z plochy.`,
+    message: `Vybrané tickety (${ids.length}) se trvale smažou z plochy.`,
     confirmLabel: "Smazat vybrané",
     confirmTone: "danger",
     onConfirm: () => {
@@ -2023,6 +1901,47 @@ function deleteSelectedNotes() {
           deniedCount > 0
             ? `Smazáno: ${removedCount}. Přeskočeno: ${deniedCount}.`
             : `Smazáno: ${removedCount}.`
+        );
+      });
+    }
+  });
+}
+
+function deleteDoneNotes() {
+  if (!me) {
+    setBoardActionStatus("Nejdříve se přihlas.", true);
+    return;
+  }
+
+  const ids = notes
+    .filter((note) => getNoteStatus(note) === "done")
+    .map((note) => note.id);
+  if (ids.length === 0) {
+    setBoardActionStatus("Není žádný vyřešený ticket ke smazání.");
+    return;
+  }
+
+  openConfirmModal({
+    title: "Smazat vyřešené tickety?",
+    message: `Vyřešené tickety (${ids.length}) se trvale smažou z hromady.`,
+    confirmLabel: "Smazat vyřešené",
+    confirmTone: "danger",
+    onConfirm: () => {
+      socket.emit("note:deleteMany", { ids }, (response) => {
+        if (!response?.ok) {
+          setBoardActionStatus(response?.message || "Smazání vyřešených ticketů se nepodařilo.", true);
+          return;
+        }
+
+        const removedCount = Number(response?.removedCount || 0);
+        const deniedCount = Number(response?.deniedCount || 0);
+        setBoardActionStatus(
+          removedCount === 0
+            ? "Vyřešené tickety nemůžeš smazat."
+            : deniedCount > 0
+              ? `Smazáno vyřešených: ${removedCount}. Přeskočeno: ${deniedCount}.`
+              : `Smazáno vyřešených: ${removedCount}.`,
+          removedCount === 0
         );
       });
     }
@@ -2519,7 +2438,7 @@ document.addEventListener("pointerdown", (event) => {
 
 function getVisibleNotes() {
   const filter = assigneeFilter.value || "Vsechny";
-  return notes.filter((note) => isNoteVisibleOnBoard(note) && (filter === "Vsechny" || note.to === filter));
+  return notes.filter((note) => isNoteVisibleOnBoard(note) && (filter === "Vsechny" || getNoteAssigneeNames(note).includes(filter)));
 }
 
 function openBoardQuickCreateAt(clientX, clientY) {
@@ -2590,10 +2509,8 @@ function openBoardInlineComposerAtPosition(x, y, mode = "text") {
     setAuthorFieldValue(boardInlineFromUser, me?.name || "");
   }
   if (boardInlineToUser && boardInlineCreateMode === "note") {
-    const fallbackTo = toUser.value || me?.name || boardInlineToUser.value;
-    if (fallbackTo) {
-      boardInlineToUser.value = fallbackTo;
-    }
+      const fallbackTo = getSelectedAssigneeNames(toUser);
+      setSelectedAssigneeNames(boardInlineToUser, fallbackTo.length ? fallbackTo : [me?.name]);
   }
   if (boardInlinePriority && boardInlineCreateMode === "note") {
     boardInlinePriority.value = priority.value || "Stredni";
@@ -2761,13 +2678,15 @@ function submitBoardInlineComposer() {
   const nextY = boardInlineDraftPosition.y;
 
   if (boardInlineCreateMode === "note") {
-    const toValue = boardInlineToUser?.value || toUser.value || me.name;
+    const toUsers = getSelectedAssigneeNames(boardInlineToUser).length
+      ? getSelectedAssigneeNames(boardInlineToUser)
+      : getSelectedAssigneeNames(toUser);
     const priorityValue = boardInlinePriority?.value || priority.value || "Stredni";
     const deadlineValue = boardInlineDeadline?.value || "";
     socket.emit("note:create", {
       text: richText,
-      to: toValue,
-      isDelegated: Boolean(boardInlineIsDelegated?.checked),
+      toUsers,
+      to: toUsers[0] || me.name,
       priority: priorityValue,
       deadline: deadlineValue,
       color: boardInlineSelectedColor,
@@ -2778,7 +2697,7 @@ function submitBoardInlineComposer() {
 
     // Keep menu form state aligned with values used from board inline composer.
     if (toUser) {
-      toUser.value = toValue;
+      setSelectedAssigneeNames(toUser, toUsers);
     }
     if (priority) {
       priority.value = priorityValue;
@@ -2875,32 +2794,6 @@ function createBoardTextElement(item) {
   });
 
   return textEl;
-}
-
-function getClientDoneLanePosition(currentNoteId) {
-  const doneWithoutCurrent = notes
-    .filter((note) => getNoteStatus(note) === "done" && note.id !== currentNoteId)
-    .sort((a, b) => a.y - b.y || a.x - b.x);
-  const activeNotes = notes.filter((note) => isActiveNote(note));
-
-  const index = doneWithoutCurrent.length;
-  const ring = Math.floor(index / CLIENT_DONE_OVAL_POINTS_PER_RING);
-  const slot = index % CLIENT_DONE_OVAL_POINTS_PER_RING;
-  const angle = -Math.PI / 2 + (slot / CLIENT_DONE_OVAL_POINTS_PER_RING) * Math.PI * 2;
-  const radiusX = CLIENT_DONE_OVAL_RADIUS_X + ring * CLIENT_DONE_OVAL_RING_STEP_X;
-  const radiusY = CLIENT_DONE_OVAL_RADIUS_Y + ring * CLIENT_DONE_OVAL_RING_STEP_Y;
-  const activeRightEdge =
-    activeNotes.length > 0 ? Math.max(...activeNotes.map((note) => {
-      const bounds = getNoteBounds(note);
-      return note.x + bounds.width;
-    })) : 0;
-  const minLeftEdgeForDone = activeRightEdge + CLIENT_DONE_ACTIVE_GAP_PX;
-  const doneCenterX = Math.max(CLIENT_DONE_OVAL_BASE_CENTER_X, minLeftEdgeForDone + radiusX);
-
-  return {
-    x: Math.round(doneCenterX + Math.cos(angle) * radiusX),
-    y: Math.round(CLIENT_DONE_OVAL_CENTER_Y + Math.sin(angle) * radiusY)
-  };
 }
 
 function getAlignmentItems(kind, currentId) {
@@ -3130,7 +3023,7 @@ function createStickyElement(note) {
   sticky.classList.toggle("done", getNoteStatus(note) === "done");
   sticky.classList.toggle("selected", selectedNoteIds.has(note.id));
 
-  const canDelete = canEditNote(note);
+  const canDelete = getNoteStatus(note) === "done" || canEditNote(note);
   if (!canDelete) {
     deleteToggle.classList.add("hidden");
   }
@@ -3234,6 +3127,15 @@ function createStickyElement(note) {
     openNotePreview(note);
   });
 
+  sticky.addEventListener("click", (event) => {
+    if (!connectionMode || event.target.closest("button")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    handleConnectionNoteClick(note);
+  });
+
   return sticky;
 }
 
@@ -3268,8 +3170,33 @@ function renderBoard() {
   ensureSelectionRect();
   clearSelectionVisual();
   updateDonePositionHints();
-  refreshArchivedNotesUi();
   renderDelegatedSourceSelects();
+}
+
+function animateNoteToDoneStack(note) {
+  const element = boardCanvas?.querySelector(`.sticky[data-id="${note.id}"]`);
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  const bounds = getNoteBounds(note);
+  ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
+  element.classList.add("done", "done-moving");
+  element.querySelector(".done-toggle")?.replaceChildren(document.createTextNode("Obnovit"));
+
+  requestAnimationFrame(() => {
+    element.style.left = `${note.x}px`;
+    element.style.top = `${note.y}px`;
+  });
+
+  window.setTimeout(() => {
+    element.classList.remove("done-moving");
+    updateDonePositionHints();
+    renderNoteConnections();
+  }, DONE_MOVE_ANIMATION_MS);
+
+  updateDonePositionHints();
+  return true;
 }
 
 function removeRenderedBoardItem(selector) {
@@ -3283,7 +3210,6 @@ function removeRenderedBoardItem(selector) {
   ensureSelectionRect();
   clearSelectionVisual();
   updateDonePositionHints();
-  refreshArchivedNotesUi();
   renderNoteConnections();
   renderDelegatedSourceSelects();
 }
@@ -3308,9 +3234,15 @@ function syncNoteAfterServerUpdate(note, previousStatus = "active") {
       activePointerId = null;
     }
 
+    if (previousStatus === "active" && isStillVisibleOnBoard && animateNoteToDoneStack(note)) {
+      if (activePreviewNoteId === note.id) {
+        refreshOpenPreview();
+      }
+      return;
+    }
+
     if (!isStillVisibleOnBoard) {
       removeRenderedBoardItem(selector);
-      refreshArchivedNotesUi();
       return;
     }
 
@@ -3376,8 +3308,8 @@ noteForm.addEventListener("submit", (event) => {
 
   socket.emit("note:create", {
     text,
-    to: toUser.value,
-    isDelegated: Boolean(noteIsDelegated?.checked),
+    toUsers: getSelectedAssigneeNames(toUser),
+    to: getSelectedAssigneeNames(toUser)[0] || me.name,
     priority: priority.value,
     deadline: deadline.value,
     color: selectedNoteColor,
@@ -3483,8 +3415,8 @@ dockToggleFilter?.addEventListener("click", () => {
   openDockSection("filter");
 });
 
-dockToggleActions?.addEventListener("click", () => {
-  openDockSection("actions");
+connectNotesBtn?.addEventListener("click", () => {
+  setConnectionMode(!connectionMode);
 });
 
 noteScaleMinus?.addEventListener("click", () => {
@@ -3563,8 +3495,8 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
     {
       id: note.id,
       text,
-      to: notePreviewEditTo.value,
-      isDelegated: Boolean(notePreviewEditIsDelegated?.checked),
+      toUsers: getSelectedAssigneeNames(notePreviewEditTo),
+      to: getSelectedAssigneeNames(notePreviewEditTo)[0] || note.to,
       priority: notePreviewEditPriority.value,
       deadline: notePreviewEditDeadline.value,
       color: previewEditSelectedColor,
@@ -3590,6 +3522,7 @@ document.addEventListener("keydown", (event) => {
     (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 
   if (event.key === "Escape") {
+    setConnectionMode(false);
     closeSelectionContextMenu();
     closeNotePreview();
     closeDockPanel();
@@ -3729,15 +3662,15 @@ document.addEventListener("pointerdown", (event) => {
   }
 });
 
-saveSessionBtn.addEventListener("click", () => {
+saveSessionBtn?.addEventListener("click", () => {
   if (!me) {
-    sessionSaveStatus.textContent = "Nejdříve se přihlas.";
-    sessionSaveStatus.classList.add("is-error");
+    sessionSaveStatus?.replaceChildren(document.createTextNode("Nejdříve se přihlas."));
+    sessionSaveStatus?.classList.add("is-error");
     return;
   }
 
-  sessionSaveStatus.textContent = "Ukládám aktuální rozvržení...";
-  sessionSaveStatus.classList.remove("is-error");
+  sessionSaveStatus?.replaceChildren(document.createTextNode("Ukládám aktuální rozvržení..."));
+  sessionSaveStatus?.classList.remove("is-error");
   socket.emit("session:saveSnapshot");
 });
 
@@ -3878,20 +3811,6 @@ document.addEventListener("click", (event) => {
   }
 });
 
-archiveIndicator?.addEventListener("click", () => {
-  openNoteArchive();
-});
-
-noteArchive?.addEventListener("click", (event) => {
-  if (event.target instanceof HTMLElement && event.target.dataset.closeArchive === "true") {
-    closeNoteArchive();
-  }
-});
-
-noteArchiveClose?.addEventListener("click", () => {
-  closeNoteArchive();
-});
-
 confirmModal?.addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.dataset.closeConfirm === "true") {
     closeConfirmModal();
@@ -3943,6 +3862,10 @@ deleteAllBtn?.addEventListener("click", () => {
 
 deleteSelectedBtn?.addEventListener("click", () => {
   deleteSelectedNotes();
+});
+
+deleteDoneBtn?.addEventListener("click", () => {
+  deleteDoneNotes();
 });
 
 markSelectedDoneBtn?.addEventListener("click", () => {
@@ -4388,9 +4311,10 @@ socket.on("connect", () => {
   socket.emit("auth:resume", { sessionToken });
 });
 
-socket.on("board:init", ({ notes: initialNotes, texts: initialTexts, activity }) => {
+socket.on("board:init", ({ notes: initialNotes, texts: initialTexts, connections: initialConnections, activity }) => {
   notes = Array.isArray(initialNotes) ? initialNotes.map(normalizeIncomingNote).filter(Boolean) : [];
   boardTexts = Array.isArray(initialTexts) ? initialTexts.map(normalizeIncomingBoardText).filter(Boolean) : [];
+  noteConnections = Array.isArray(initialConnections) ? initialConnections : [];
   selectedNoteIds = new Set();
   notes.forEach((note) => {
     const bounds = getNoteBounds(note);
@@ -4408,6 +4332,20 @@ socket.on("users:list", (users) => {
   renderPresence();
   renderUserSelects();
   renderBoard();
+});
+
+socket.on("connection:created", (connection) => {
+  if (!noteConnections.some((item) => item.fromId === connection.fromId && item.toId === connection.toId)
+    && !noteConnections.some((item) => item.fromId === connection.toId && item.toId === connection.fromId)) {
+    noteConnections.push(connection);
+    renderNoteConnections();
+  }
+});
+
+socket.on("connection:deleted", (connection) => {
+  noteConnections = noteConnections.filter((item) => !(item.fromId === connection.fromId && item.toId === connection.toId)
+    && !(item.fromId === connection.toId && item.toId === connection.fromId));
+  renderNoteConnections();
 });
 
 socket.on("activity:list", (items) => {
@@ -4579,9 +4517,8 @@ socket.on("note:toggled", ({ id, done, x, y, moved }) => {
   note.done = done;
 
   if (done && (!Number.isFinite(x) || !Number.isFinite(y))) {
-    const fallbackPosition = getClientDoneLanePosition(id);
-    x = fallbackPosition.x;
-    y = fallbackPosition.y;
+    x = DONE_STACK_X;
+    y = DONE_STACK_Y;
     moved = true;
     socket.emit("note:move", { id, x, y });
   }
@@ -4697,14 +4634,14 @@ socket.on("session:saved", ({ createdAt, noteCount }) => {
     hour: "2-digit",
     minute: "2-digit"
   });
-  sessionSaveStatus.textContent = `Snapshot uložen ${date}. Počet lístků: ${noteCount}.`;
-  sessionSaveStatus.classList.remove("is-error");
+  sessionSaveStatus?.replaceChildren(document.createTextNode(`Snapshot uložen ${date}. Počet lístků: ${noteCount}.`));
+  sessionSaveStatus?.classList.remove("is-error");
   loadSnapshotOptions();
 });
 
 socket.on("session:error", (message) => {
-  sessionSaveStatus.textContent = message || "Uložení snapshotu se nepodařilo.";
-  sessionSaveStatus.classList.add("is-error");
+  sessionSaveStatus?.replaceChildren(document.createTextNode(message || "Uložení snapshotu se nepodařilo."));
+  sessionSaveStatus?.classList.add("is-error");
 });
 
 renderNotePalette();

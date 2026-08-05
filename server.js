@@ -18,6 +18,7 @@ const usersBySocket = new Map();
 const sessionsByToken = new Map();
 const notes = [];
 const boardTexts = [];
+const noteConnections = [];
 const textResizeActivityByUser = new Map();
 const noteResizeActivityByUser = new Map();
 
@@ -27,14 +28,11 @@ const activityDir = path.join(dataDir, "activity");
 const legacySnapshotFilePath = path.join(dataDir, "board-snapshots.json");
 const usersFilePath = path.join(dataDir, "users.json");
 const ACTIVITY_LIMIT = 30;
-const DONE_OVAL_BASE_CENTER_X = 2400;
-const DONE_OVAL_CENTER_Y = 430;
-const DONE_OVAL_RADIUS_X = 320;
-const DONE_OVAL_RADIUS_Y = 220;
-const DONE_OVAL_POINTS_PER_RING = 14;
-const DONE_OVAL_RING_STEP_X = 170;
-const DONE_OVAL_RING_STEP_Y = 130;
-const DONE_ACTIVE_GAP_PX = 500;
+const DONE_STACK_X = 2400;
+const DONE_STACK_Y = 430;
+const DONE_STACK_COLUMNS = 4;
+const DONE_STACK_GAP_X = 28;
+const DONE_STACK_GAP_Y = 28;
 const TEXT_RESIZE_ACTIVITY_THROTTLE_MS = 1500;
 const NOTE_WIDTH = 206;
 const NOTE_DEFAULT_WIDTH = 188;
@@ -116,6 +114,15 @@ function sanitizeNoteDimension(value, fallback, min, max) {
 
 function sanitizeUser(name) {
   return String(name || "").trim().slice(0, 30);
+}
+
+function sanitizeAssigneeNames(value, fallback = "") {
+  const values = Array.isArray(value) ? value : String(value || fallback).split(",");
+  return Array.from(new Set(values.map(sanitizeUser).filter(Boolean))).slice(0, 20);
+}
+
+function getAssigneeNames(note) {
+  return sanitizeAssigneeNames(note?.toUsers, note?.to);
 }
 
 function sanitizeEmail(value) {
@@ -245,6 +252,10 @@ function canManageNote(_user, _note) {
   return isAdmin(_user) || Boolean(_user?.name && _note?.from === _user.name);
 }
 
+function canDeleteNote(user, note) {
+  return getNoteStatus(note) === "done" || canManageNote(user, note);
+}
+
 function canToggleNote(_user, _note) {
   return true;
 }
@@ -269,6 +280,31 @@ function sanitizeLinkedSourceNoteId(value) {
   return clean || null;
 }
 
+function getDoneStackPosition(currentNoteId = null) {
+  const doneNotes = notes
+    .filter((note) => getNoteStatus(note) === "done" && note.id !== currentNoteId)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const index = doneNotes.length;
+  const column = index % DONE_STACK_COLUMNS;
+  const row = Math.floor(index / DONE_STACK_COLUMNS);
+
+  return {
+    x: DONE_STACK_X + column * (NOTE_DEFAULT_WIDTH + DONE_STACK_GAP_X),
+    y: DONE_STACK_Y + row * (NOTE_DEFAULT_HEIGHT + DONE_STACK_GAP_Y)
+  };
+}
+
+function removeConnectionsForNote(noteId) {
+  const removed = noteConnections.filter((connection) => connection.fromId === noteId || connection.toId === noteId);
+  if (removed.length > 0) {
+    for (const connection of removed) {
+      noteConnections.splice(noteConnections.indexOf(connection), 1);
+      io.emit("connection:deleted", connection);
+    }
+  }
+  return removed.length;
+}
+
 function applyNoteStatusToNote(note, nextStatus) {
   const currentStatus = getNoteStatus(note);
   const normalizedStatus = normalizeNoteStatus(nextStatus, currentStatus === "done");
@@ -276,24 +312,13 @@ function applyNoteStatusToNote(note, nextStatus) {
     return false;
   }
 
-  if (currentStatus === "active" && normalizedStatus !== "active") {
-    note.returnX = note.x;
-    note.returnY = note.y;
-  }
-
-  if (normalizedStatus === "active") {
-    if (Number.isFinite(note.returnX) && Number.isFinite(note.returnY)) {
-      note.x = note.returnX;
-      note.y = note.returnY;
-    }
-  }
-
   note.status = normalizedStatus;
   note.done = normalizedStatus === "done";
 
-  if (normalizedStatus === "active") {
-    note.returnX = null;
-    note.returnY = null;
+  if (normalizedStatus === "done") {
+    const stackPosition = getDoneStackPosition(note.id);
+    note.x = stackPosition.x;
+    note.y = stackPosition.y;
   }
 
   return true;
@@ -319,7 +344,7 @@ function resolveLinkedSourceNoteId(candidateId, linkedForUserName, currentNoteId
     return null;
   }
 
-  return sanitizeUser(sourceNote.to) === normalizedLinkedForUserName ? sourceNote.id : null;
+  return getAssigneeNames(sourceNote).some((name) => sanitizeUser(name) === normalizedLinkedForUserName) ? sourceNote.id : null;
 }
 
 function findAutoLinkedSourceNoteId(delegatorName, linkedForUserName, currentNoteId = null) {
@@ -343,7 +368,7 @@ function findAutoLinkedSourceNoteId(delegatorName, linkedForUserName, currentNot
       continue;
     }
 
-    if (sanitizeUser(note.to) !== normalizedLinkedForUserName) {
+    if (!getAssigneeNames(note).some((name) => sanitizeUser(name) === normalizedLinkedForUserName)) {
       continue;
     }
 
@@ -369,7 +394,7 @@ function findLatestIncomingAssignedNoteId(linkedForUserName, currentNoteId = nul
       continue;
     }
 
-    if (sanitizeUser(note.to) !== normalizedLinkedForUserName) {
+    if (!getAssigneeNames(note).some((name) => sanitizeUser(name) === normalizedLinkedForUserName)) {
       continue;
     }
 
@@ -407,7 +432,7 @@ function findLatestPendingDelegatedNoteForUser(userName, currentNoteId = null) {
       continue;
     }
 
-    if (sanitizeUser(note.from) !== normalizedUserName || sanitizeUser(note.to) !== normalizedUserName) {
+    if (sanitizeUser(note.from) !== normalizedUserName || !getAssigneeNames(note).includes(normalizedUserName)) {
       continue;
     }
 
@@ -422,9 +447,9 @@ function linkPendingDelegatedNoteToSourceNote(sourceNote, currentPendingNoteId =
     return null;
   }
 
-  const assigneeName = sanitizeUser(sourceNote.to);
   const authorName = sanitizeUser(sourceNote.from);
-  if (!assigneeName || !authorName || assigneeName === authorName) {
+  const assigneeName = getAssigneeNames(sourceNote).find((name) => sanitizeUser(name) !== authorName);
+  if (!assigneeName || !authorName) {
     return null;
   }
 
@@ -502,29 +527,6 @@ function bindSessionToSocket(socket, sessionToken) {
 
   usersBySocket.set(socket.id, user);
   return user;
-}
-
-function getDoneLanePosition(currentNoteId) {
-  const doneWithoutCurrent = notes
-    .filter((note) => note.done && note.id !== currentNoteId)
-    .sort((a, b) => a.y - b.y || a.x - b.x);
-  const activeNotes = notes.filter((note) => !note.done);
-
-  const index = doneWithoutCurrent.length;
-  const ring = Math.floor(index / DONE_OVAL_POINTS_PER_RING);
-  const slot = index % DONE_OVAL_POINTS_PER_RING;
-  const angle = -Math.PI / 2 + (slot / DONE_OVAL_POINTS_PER_RING) * Math.PI * 2;
-  const radiusX = DONE_OVAL_RADIUS_X + ring * DONE_OVAL_RING_STEP_X;
-  const radiusY = DONE_OVAL_RADIUS_Y + ring * DONE_OVAL_RING_STEP_Y;
-  const activeRightEdge =
-    activeNotes.length > 0 ? Math.max(...activeNotes.map((note) => note.x + (Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH))) : 0;
-  const minLeftEdgeForDone = activeRightEdge + DONE_ACTIVE_GAP_PX;
-  const doneCenterX = Math.max(DONE_OVAL_BASE_CENTER_X, minLeftEdgeForDone + radiusX);
-
-  return {
-    x: Math.round(doneCenterX + Math.cos(angle) * radiusX),
-    y: Math.round(DONE_OVAL_CENTER_Y + Math.sin(angle) * radiusY)
-  };
 }
 
 function formatSnapshotDate(date = new Date()) {
@@ -671,15 +673,18 @@ function restoreBoardFromSnapshot(snapshot) {
 
   const snapshotNotes = Array.isArray(snapshot.notes) ? snapshot.notes : [];
   const snapshotTexts = Array.isArray(snapshot.texts) ? snapshot.texts : [];
+  const snapshotConnections = Array.isArray(snapshot.connections) ? snapshot.connections : [];
 
   notes.length = 0;
   boardTexts.length = 0;
+  noteConnections.length = 0;
 
   snapshotNotes.forEach((item, index) => {
     const owner = sanitizeUser(item?.owner || item?.from);
     const from = sanitizeUser(item?.from || owner);
     const ownerEmail = sanitizeEmail(item?.ownerEmail);
     const ownerId = sanitizeEmail(item?.ownerId || ownerEmail) || owner || from;
+    const toUsers = sanitizeAssigneeNames(item?.toUsers ?? item?.to, owner || from);
 
     notes.push({
       id: String(item?.id || `${Date.now()}-restored-note-${index}`),
@@ -690,7 +695,8 @@ function restoreBoardFromSnapshot(snapshot) {
       from,
       isDelegated: Boolean(item?.isDelegated || sanitizeLinkedSourceNoteId(item?.linkedSourceNoteId)),
       linkedSourceNoteId: sanitizeLinkedSourceNoteId(item?.linkedSourceNoteId),
-      to: sanitizeUser(item?.to) || owner || from,
+      toUsers,
+      to: toUsers.join(", "),
       priority: ["Nizka", "Stredni", "Vysoka"].includes(item?.priority) ? item.priority : "Stredni",
       deadline: String(item?.deadline || "").slice(0, 10),
       status: normalizeNoteStatus(item?.status, Boolean(item?.done)),
@@ -700,11 +706,19 @@ function restoreBoardFromSnapshot(snapshot) {
       x: Number.isFinite(item?.position?.x) ? item.position.x : 140,
       y: Number.isFinite(item?.position?.y) ? item.position.y : 120,
       width: sanitizeNoteDimension(item?.width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH),
-      height: sanitizeNoteDimension(item?.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT),
-      returnX: Number.isFinite(item?.returnX) ? item.returnX : null,
-      returnY: Number.isFinite(item?.returnY) ? item.returnY : null
+      height: sanitizeNoteDimension(item?.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT)
     });
   });
+
+  notes
+    .filter((note) => getNoteStatus(note) === "done")
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .forEach((note, index) => {
+      const column = index % DONE_STACK_COLUMNS;
+      const row = Math.floor(index / DONE_STACK_COLUMNS);
+      note.x = DONE_STACK_X + column * (NOTE_DEFAULT_WIDTH + DONE_STACK_GAP_X);
+      note.y = DONE_STACK_Y + row * (NOTE_DEFAULT_HEIGHT + DONE_STACK_GAP_Y);
+    });
 
   snapshotTexts.forEach((item, index) => {
     boardTexts.push({
@@ -722,11 +736,21 @@ function restoreBoardFromSnapshot(snapshot) {
     });
   });
 
+  const noteIds = new Set(notes.map((note) => note.id));
+  snapshotConnections.forEach((connection) => {
+    const fromId = String(connection?.fromId || "");
+    const toId = String(connection?.toId || "");
+    if (fromId && toId && fromId !== toId && noteIds.has(fromId) && noteIds.has(toId)) {
+      noteConnections.push({ fromId, toId });
+    }
+  });
+
   return {
     id: snapshot.id,
     createdAt: snapshot.createdAt,
     noteCount: notes.length,
-    textCount: boardTexts.length
+    textCount: boardTexts.length,
+    connectionCount: noteConnections.length
   };
 }
 
@@ -781,6 +805,7 @@ function saveBoardSnapshot(savedBy) {
     savedBy,
     noteCount: notes.length,
     textCount: boardTexts.length,
+    connections: noteConnections,
     notes: notes.map((note) => ({
       id: note.id,
       text: note.text,
@@ -790,6 +815,7 @@ function saveBoardSnapshot(savedBy) {
       from: note.from,
       isDelegated: Boolean(note.isDelegated),
       linkedSourceNoteId: sanitizeLinkedSourceNoteId(note.linkedSourceNoteId),
+      toUsers: getAssigneeNames(note),
       to: note.to,
       priority: note.priority,
       deadline: note.deadline,
@@ -797,8 +823,6 @@ function saveBoardSnapshot(savedBy) {
       done: note.done,
       color: note.color,
       format: sanitizeNoteFormat(note.format),
-      returnX: Number.isFinite(note.returnX) ? note.returnX : null,
-      returnY: Number.isFinite(note.returnY) ? note.returnY : null,
       width: Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH,
       height: Number.isFinite(note.height) ? note.height : NOTE_DEFAULT_HEIGHT,
       position: {
@@ -855,6 +879,7 @@ io.on("connection", (socket) => {
   socket.emit("board:init", {
     notes,
     texts: boardTexts,
+    connections: noteConnections,
     activity
   });
 
@@ -1028,8 +1053,8 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const assigneeName = sanitizeUser(payload?.to) || user.name;
-    const isDelegated = Boolean(payload?.isDelegated);
+    const assigneeNames = sanitizeAssigneeNames(payload?.toUsers ?? payload?.to, user.name);
+    const isDelegated = false;
 
     const note = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1039,8 +1064,9 @@ io.on("connection", (socket) => {
       ownerId: sanitizeEmail(user.email),
       from: user.name,
       isDelegated,
-      linkedSourceNoteId: isDelegated && assigneeName === user.name ? findLatestIncomingAssignedNoteId(user.name) : null,
-      to: assigneeName,
+      linkedSourceNoteId: isDelegated && assigneeNames.includes(user.name) ? findLatestIncomingAssignedNoteId(user.name) : null,
+      toUsers: assigneeNames,
+      to: assigneeNames.join(", "),
       priority: ["Nizka", "Stredni", "Vysoka"].includes(payload?.priority)
         ? payload.priority
         : "Stredni",
@@ -1051,8 +1077,6 @@ io.on("connection", (socket) => {
       y: Number.isFinite(payload?.y) ? payload.y : 120,
       width: sanitizeNoteDimension(payload?.width, NOTE_DEFAULT_WIDTH, NOTE_MIN_WIDTH, NOTE_MAX_WIDTH),
       height: sanitizeNoteDimension(payload?.height, NOTE_DEFAULT_HEIGHT, NOTE_MIN_HEIGHT, NOTE_MAX_HEIGHT),
-      returnX: null,
-      returnY: null,
       status: "active",
       done: false
     };
@@ -1099,6 +1123,37 @@ io.on("connection", (socket) => {
     boardTexts.push(textItem);
     io.emit("text:created", textItem);
     addActivity(`${user.name} přidal/a text: "${textSnippet(textItem.text)}" na plochu`);
+  });
+
+  socket.on("connection:create", ({ fromId, toId }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    const cleanFromId = String(fromId || "");
+    const cleanToId = String(toId || "");
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+    if (!cleanFromId || !cleanToId || cleanFromId === cleanToId) {
+      ack?.({ ok: false, message: "Vyber dva různé tickety." });
+      return;
+    }
+    if (!notes.some((note) => note.id === cleanFromId) || !notes.some((note) => note.id === cleanToId)) {
+      ack?.({ ok: false, message: "Jeden z vybraných ticketů už neexistuje." });
+      return;
+    }
+    if (noteConnections.some((connection) => (
+      (connection.fromId === cleanFromId && connection.toId === cleanToId)
+      || (connection.fromId === cleanToId && connection.toId === cleanFromId)
+    ))) {
+      ack?.({ ok: true, connection: { fromId: cleanFromId, toId: cleanToId }, existing: true });
+      return;
+    }
+
+    const connection = { fromId: cleanFromId, toId: cleanToId };
+    noteConnections.push(connection);
+    io.emit("connection:created", connection);
+    addActivity(`${user.name} propojil/a dva tickety`);
+    ack?.({ ok: true, connection });
   });
 
   socket.on("note:move", ({ id, x, y }) => {
@@ -1255,6 +1310,9 @@ io.on("connection", (socket) => {
     const currentStatus = getNoteStatus(note);
     const nextStatus = currentStatus === "done" ? "active" : "done";
     applyNoteStatusToNote(note, nextStatus);
+    if (nextStatus === "done") {
+      removeConnectionsForNote(note.id);
+    }
 
     io.emit("note:updated", note);
     addActivity(
@@ -1295,10 +1353,12 @@ io.on("connection", (socket) => {
     }
 
     note.text = text;
-    note.to = sanitizeUser(payload?.to) || note.to;
-    const isDelegated = Boolean(payload?.isDelegated);
+    const assigneeNames = sanitizeAssigneeNames(payload?.toUsers ?? payload?.to, note.to);
+    note.toUsers = assigneeNames;
+    note.to = assigneeNames.join(", ");
+    const isDelegated = payload?.isDelegated === undefined ? Boolean(note.isDelegated) : Boolean(payload.isDelegated);
     note.isDelegated = isDelegated;
-    note.linkedSourceNoteId = isDelegated && note.to === user.name
+    note.linkedSourceNoteId = isDelegated && assigneeNames.includes(user.name)
       ? findLatestIncomingAssignedNoteId(user.name, note.id)
       : null;
     note.priority = ["Nizka", "Stredni", "Vysoka"].includes(payload?.priority)
@@ -1334,8 +1394,8 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (!canManageNote(user, note)) {
-      ack?.({ ok: false, message: "Tento ticket může smazat jen jeho autor nebo admin." });
+    if (!canDeleteNote(user, note)) {
+      ack?.({ ok: false, message: "Tento aktivní ticket může smazat jen jeho autor nebo admin." });
       return;
     }
 
@@ -1371,7 +1431,7 @@ io.on("connection", (socket) => {
         return;
       }
 
-      if (!canManageNote(user, notes[noteIndex])) {
+      if (!canDeleteNote(user, notes[noteIndex])) {
         deniedCount += 1;
         return;
       }
@@ -1429,6 +1489,7 @@ io.on("connection", (socket) => {
       }
 
       applyNoteStatusToNote(note, "done");
+      removeConnectionsForNote(note.id);
       updatedCount += 1;
 
       io.emit("note:updated", note);
