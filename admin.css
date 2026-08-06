@@ -95,6 +95,22 @@ a { color: var(--blue); font-weight: 600; }
 .small-button { padding: 6px 8px; font-size: 0.75rem; }
 .danger-button { color: var(--danger); }
 .empty-state { color: var(--muted); }
+.analysis-panel {
+  margin-top: 22px;
+  padding: 22px;
+  border-radius: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.panel-description { margin: 10px 0 0; color: var(--muted); font-size: 0.86rem; }
+.activity-filters { grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1fr) 150px 150px auto auto; align-items: end; gap: 10px; }
+.activity-filters button { min-height: 42px; }
+.analysis-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.activity-results { display: grid; gap: 0; margin-top: 12px; max-height: 440px; overflow: auto; border-top: 1px solid var(--line); }
+.activity-entry { display: grid; grid-template-columns: 180px minmax(0, 1fr) 180px; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 0.84rem; }
+.activity-entry time, .activity-entry small { color: var(--muted); font-size: 0.75rem; }
+.activity-entry span { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .admin-shell { padding: 22px 14px 44px; }
   .admin-header { align-items: start; flex-direction: column; }
@@ -103,4 +119,7 @@ a { color: var(--blue); font-weight: 600; }
   .user-row { grid-template-columns: 14px minmax(0, 1fr) auto; }
   .role-badge { grid-column: 2; grid-row: 2; justify-self: start; }
   .row-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
+  .activity-filters { grid-template-columns: 1fr 1fr; }
+  .activity-filters label:first-child, .activity-filters label:nth-child(2) { grid-column: span 2; }
+  .activity-entry { grid-template-columns: 1fr; gap: 4px; }
 }

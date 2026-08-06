@@ -22,6 +22,14 @@ const userStatus = document.querySelector("#user-status");
 const userList = document.querySelector("#user-list");
 const listStatus = document.querySelector("#list-status");
 const refreshButton = document.querySelector("#refresh-users");
+const activityFilterForm = document.querySelector("#activity-filter-form");
+const activityQuery = document.querySelector("#activity-query");
+const activityUser = document.querySelector("#activity-user");
+const activityFrom = document.querySelector("#activity-from");
+const activityTo = document.querySelector("#activity-to");
+const clearActivityFiltersButton = document.querySelector("#clear-activity-filters");
+const activityStatus = document.querySelector("#activity-status");
+const activityResults = document.querySelector("#activity-results");
 
 let currentUser = null;
 let sessionToken = "";
@@ -159,6 +167,39 @@ async function loadUsers() {
   }
 }
 
+function getActivityQuery() {
+  const params = new URLSearchParams();
+  if (activityQuery.value.trim()) params.set("q", activityQuery.value.trim());
+  if (activityUser.value.trim()) params.set("user", activityUser.value.trim());
+  if (activityFrom.value) params.set("from", activityFrom.value);
+  if (activityTo.value) params.set("to", activityTo.value);
+  return params;
+}
+
+async function loadActivity() {
+  setStatus(activityStatus, "Načítám feed...");
+  try {
+    const payload = await apiRequest(`/api/admin/activity?${getActivityQuery().toString()}&limit=200`);
+    activityResults.innerHTML = payload.entries.length
+      ? payload.entries.map((entry) => `
+        <article class="activity-entry">
+          <time>${escapeHtml(entry.createdAt || `${entry.date || ""} ${entry.time || ""}`)}</time>
+          <span>${escapeHtml(entry.message)}</span>
+          <small>běh ${escapeHtml(entry.runStartedAt || entry.runId || "neuveden")}</small>
+        </article>`).join("")
+      : '<p class="empty-state">Pro zadané filtry nebyly nalezeny žádné události.</p>';
+    setStatus(activityStatus, `${payload.total} událostí nalezeno.`);
+  } catch (error) {
+    setStatus(activityStatus, error.message, true);
+  }
+}
+
+function downloadExport(path, format) {
+  const params = getActivityQuery();
+  params.set("format", format);
+  window.location.href = `${path}?${params.toString()}`;
+}
+
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
   setStatus(loginStatus, "Přihlašování...");
@@ -178,6 +219,7 @@ socket.on("auth:ok", (user) => {
   appView.classList.remove("hidden");
   identity.textContent = `Přihlášen: ${user.name} · ${user.email}`;
   loadUsers();
+  loadActivity();
 });
 
 socket.on("auth:required", () => {
@@ -258,5 +300,17 @@ userList.addEventListener("click", async (event) => {
 
 cancelEditButton.addEventListener("click", resetForm);
 refreshButton.addEventListener("click", loadUsers);
+activityFilterForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadActivity();
+});
+clearActivityFiltersButton.addEventListener("click", () => {
+  activityFilterForm.reset();
+  loadActivity();
+});
+document.querySelector("#export-activity-json").addEventListener("click", () => downloadExport("/api/admin/activity/export", "json"));
+document.querySelector("#export-activity-csv").addEventListener("click", () => downloadExport("/api/admin/activity/export", "csv"));
+document.querySelector("#export-snapshots-json").addEventListener("click", () => downloadExport("/api/admin/snapshots/export", "json"));
+document.querySelector("#export-snapshots-csv").addEventListener("click", () => downloadExport("/api/admin/snapshots/export", "csv"));
 
 resumeBoardSession();

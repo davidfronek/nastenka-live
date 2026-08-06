@@ -54,16 +54,18 @@ async function initializeFirestoreStorage() {
     return null;
   }
 
-  const [usersSnapshot, snapshotsSnapshot, activitySnapshot] = await Promise.all([
+  const [usersSnapshot, snapshotsSnapshot, activityRunsSnapshot, legacyActivitySnapshot] = await Promise.all([
     db.collection("nastenka/config/users").get(),
     db.collection("nastenka/snapshots/items").orderBy("createdAt", "desc").get(),
-    db.collection("nastenka/activity/items").orderBy("createdAt", "desc").limit(30).get()
+    db.collection("nastenka/activity/runs").orderBy("startedAt", "desc").get(),
+    db.collection("nastenka/activity/items").orderBy("createdAt", "desc").get()
   ]);
 
   return {
     users: usersSnapshot.docs.map((item) => item.data()),
     snapshots: snapshotsSnapshot.docs.map((item) => item.data()),
-    activity: activitySnapshot.docs.map((item) => item.data())
+    activityRuns: activityRunsSnapshot.docs.map((item) => item.data()),
+    legacyActivity: legacyActivitySnapshot.docs.map((item) => item.data())
   };
 }
 
@@ -97,24 +99,9 @@ async function saveSnapshot(snapshot) {
   await db.collection("nastenka/snapshots/items").doc(String(snapshot.id)).set(snapshot);
 }
 
-async function saveActivity(activity) {
+async function saveActivityRun(run) {
   const db = assertEnabled();
-  const activityCollection = db.collection("nastenka/activity/items");
-  const batch = db.batch();
-  const entries = activity.slice(0, 30);
-  const current = await activityCollection.get();
-  const nextIds = new Set(entries.map((entry) => String(entry.id)));
-
-  current.docs.forEach((item) => {
-    if (!nextIds.has(item.id)) {
-      batch.delete(item.ref);
-    }
-  });
-
-  entries.forEach((entry) => {
-    batch.set(activityCollection.doc(String(entry.id)), entry);
-  });
-  await batch.commit();
+  await db.collection("nastenka/activity/runs").doc(String(run.id)).set(run);
 }
 
 module.exports = {
@@ -123,5 +110,5 @@ module.exports = {
   loadUsers,
   saveUsers,
   saveSnapshot,
-  saveActivity
+  saveActivityRun
 };

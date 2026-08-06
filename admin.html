@@ -78,6 +78,32 @@
             <p id="list-status" class="status" role="alert"></p>
           </section>
         </section>
+
+        <section class="analysis-panel">
+          <div class="list-heading">
+            <div>
+              <div class="eyebrow">HISTORIE A EXPORT</div>
+              <h2>Analýza live feedu</h2>
+              <p class="panel-description">Aktuální feed začíná po každém spuštění znovu. Starší běhy jsou zde k vyhledání a exportu.</p>
+            </div>
+          </div>
+          <form id="activity-filter-form" class="activity-filters">
+            <label>Hledat<input id="activity-query" type="search" placeholder="Text události..." /></label>
+            <label>Uživatel<input id="activity-user" type="search" placeholder="Jméno uživatele..." /></label>
+            <label>Od<input id="activity-from" type="date" /></label>
+            <label>Do<input id="activity-to" type="date" /></label>
+            <button type="submit">Vyhledat</button>
+            <button id="clear-activity-filters" class="small-button" type="button">Vymazat</button>
+          </form>
+          <div class="analysis-actions">
+            <button id="export-activity-json" class="small-button" type="button">Export feedu JSON</button>
+            <button id="export-activity-csv" class="small-button" type="button">Export feedu CSV</button>
+            <button id="export-snapshots-json" class="small-button" type="button">Export snapshotů JSON</button>
+            <button id="export-snapshots-csv" class="small-button" type="button">Export snapshotů CSV</button>
+          </div>
+          <p id="activity-status" class="status" role="alert"></p>
+          <div id="activity-results" class="activity-results"></div>
+        </section>
       </section>
     </main>
     <script src="/socket.io/socket.io.js"></script>

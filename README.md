@@ -53,3 +53,12 @@ npm run firestore:import
 ```
 
 Po importu spust server se stejnymi promennymi prostredi. Firestore rezim uklada uzivatele, snapshoty i aktivitu; pri vypnutem `STORAGE_PROVIDER` zustava puvodni lokalni chovani.
+
+## Export a analyza historie
+
+Administratori maji v `admin.html` panel `Analýza live feedu`. Umoznuje hledat v historickych udalostech podle textu, uzivatele a data a stahnout:
+
+- snapshoty jako JSON nebo CSV,
+- live feed jako JSON nebo CSV.
+
+Pri kazdem startu server vytvori novy beh live feedu. Stary feed se uz neobnovuje do zive plochy, ale zustava ulozeny pro pozdejsi analyzu. Ve Firestore jsou behy ulozene v kolekci `nastenka/activity/runs`; lokalne se ukladaji do samostatnych JSON souboru v `data/activity/YYYY-MM-DD/`.

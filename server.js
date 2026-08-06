@@ -11,7 +11,7 @@ const {
   loadUsers: loadUsersFromFirestore,
   saveUsers: saveUsersToFirestore,
   saveSnapshot: saveSnapshotToFirestore,
-  saveActivity: saveActivityToFirestore
+  saveActivityRun: saveActivityRunToFirestore
 } = require("./firestore-storage");
 
 const app = express();
@@ -32,13 +32,15 @@ const textResizeActivityByUser = new Map();
 const noteResizeActivityByUser = new Map();
 
 const activity = [];
+const activityRuns = [];
+const activityRunId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const activityRunStartedAt = new Date().toISOString();
 const dataDir = path.join(__dirname, "data");
 const activityDir = path.join(dataDir, "activity");
 const legacySnapshotFilePath = path.join(dataDir, "board-snapshots.json");
 const usersFilePath = path.join(dataDir, "users.json");
 let firestoreUsers = null;
 let firestoreSnapshots = [];
-let firestoreActivity = [];
 const ACTIVITY_LIMIT = 30;
 const DONE_STACK_X = 2400;
 const DONE_STACK_Y = 430;
@@ -274,6 +276,36 @@ function requireAdmin(req, res) {
     return null;
   }
   return user;
+}
+
+function getSnapshotExportData() {
+  return listSnapshotFilePaths().flatMap((filePath) => readSnapshots(filePath));
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function sendDownload(res, fileName, content, contentType) {
+  res.setHeader("Content-Type", `${contentType}; charset=utf-8`);
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.send(content);
+}
+
+function filterActivityEntries(entries, query) {
+  const search = String(query.q || "").trim().toLowerCase();
+  const user = sanitizeUser(query.user).toLowerCase();
+  const from = String(query.from || "").slice(0, 10);
+  const to = String(query.to || "").slice(0, 10);
+
+  return entries.filter((entry) => {
+    const text = `${entry.message || ""} ${entry.date || ""} ${entry.time || ""}`.toLowerCase();
+    const entryDate = String(entry.createdAt || "").slice(0, 10);
+    return (!search || text.includes(search))
+      && (!user || String(entry.message || "").toLowerCase().includes(user))
+      && (!from || entryDate >= from)
+      && (!to || entryDate <= to);
+  });
 }
 
 function canManageNote(_user, _note) {
@@ -573,7 +605,7 @@ function getActivityFolderPath(date = new Date()) {
 }
 
 function getActivityFilePath(date = new Date()) {
-  return path.join(getActivityFolderPath(date), "feed.json");
+  return path.join(getActivityFolderPath(date), `${activityRunId}.json`);
 }
 
 function ensureSnapshotFile(filePath) {
@@ -606,8 +638,12 @@ function listActivityFilePaths() {
     .filter((item) => item.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(item.name))
     .map((item) => item.name)
     .sort((a, b) => b.localeCompare(a))
-    .map((dateFolder) => path.join(activityDir, dateFolder, "feed.json"))
-    .filter((filePath) => fs.existsSync(filePath));
+    .flatMap((dateFolder) => {
+      const folderPath = path.join(activityDir, dateFolder);
+      return fs.readdirSync(folderPath)
+        .filter((name) => name.endsWith(".json"))
+        .map((name) => path.join(folderPath, name));
+    });
 }
 
 function listSnapshotFilePaths() {
@@ -801,7 +837,7 @@ function restoreBoardFromSnapshot(snapshot) {
 
 function readActivityEntries(filePath = getActivityFilePath()) {
   if (isFirestoreEnabled()) {
-    return firestoreActivity;
+    return activityRuns.flatMap((run) => Array.isArray(run.entries) ? run.entries : []);
   }
 
   ensureSnapshotStorage();
@@ -816,24 +852,24 @@ function readActivityEntries(filePath = getActivityFilePath()) {
 }
 
 function readLatestActivityEntries() {
-  if (isFirestoreEnabled()) {
-    return firestoreActivity.slice(0, ACTIVITY_LIMIT);
-  }
-
-  const files = listActivityFilePaths();
-  for (const filePath of files) {
-    const entries = readActivityEntries(filePath);
-    if (entries.length > 0) {
-      return entries.slice(0, ACTIVITY_LIMIT);
-    }
-  }
   return [];
 }
 
 function saveActivityLog() {
   if (isFirestoreEnabled()) {
-    firestoreActivity = activity.slice(0, ACTIVITY_LIMIT);
-    saveActivityToFirestore(firestoreActivity).catch((error) => {
+    const run = {
+      id: activityRunId,
+      startedAt: activityRunStartedAt,
+      updatedAt: new Date().toISOString(),
+      entries: activity.slice(0, ACTIVITY_LIMIT)
+    };
+    const existingRunIndex = activityRuns.findIndex((item) => item.id === activityRunId);
+    if (existingRunIndex === -1) {
+      activityRuns.unshift(run);
+    } else {
+      activityRuns[existingRunIndex] = run;
+    }
+    saveActivityRunToFirestore(run).catch((error) => {
       console.error(`Uložení aktivity do Firestore selhalo: ${error.message}`);
     });
     return;
@@ -841,6 +877,21 @@ function saveActivityLog() {
 
   const activityFilePath = ensureActivityStorage();
   fs.writeFileSync(activityFilePath, `${JSON.stringify(activity, null, 2)}\n`, "utf-8");
+}
+
+function getActivityEntriesForAnalysis() {
+  if (isFirestoreEnabled()) {
+    return activityRuns.flatMap((run) => (Array.isArray(run.entries) ? run.entries : []).map((entry) => ({
+      ...entry,
+      runId: run.id,
+      runStartedAt: run.startedAt
+    })));
+  }
+
+  return listActivityFilePaths().flatMap((filePath) => {
+    const runId = path.basename(filePath, ".json");
+    return readActivityEntries(filePath).map((entry) => ({ ...entry, runId }));
+  });
 }
 
 function readRegisteredUsers() {
@@ -1876,6 +1927,77 @@ app.delete("/api/admin/users/:id", async (req, res) => {
   }
 });
 
+app.get("/api/admin/snapshots", (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const snapshots = getSnapshotExportData().sort((a, b) => (
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  ));
+  res.json({ ok: true, snapshots });
+});
+
+app.get("/api/admin/snapshots/export", (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const snapshots = getSnapshotExportData();
+  const format = String(req.query.format || "json").toLowerCase();
+  if (format === "csv") {
+    const rows = ["id,createdAt,savedBy,noteCount,textCount,connectionCount"];
+    snapshots.forEach((snapshot) => rows.push([
+      snapshot.id,
+      snapshot.createdAt,
+      snapshot.savedBy,
+      Array.isArray(snapshot.notes) ? snapshot.notes.length : snapshot.noteCount,
+      Array.isArray(snapshot.texts) ? snapshot.texts.length : snapshot.textCount,
+      Array.isArray(snapshot.connections) ? snapshot.connections.length : 0
+    ].map(csvCell).join(",")));
+    sendDownload(res, "nastenka-snapshoty.csv", `\uFEFF${rows.join("\n")}`, "text/csv");
+    return;
+  }
+
+  sendDownload(res, "nastenka-snapshoty.json", JSON.stringify(snapshots, null, 2), "application/json");
+});
+
+app.get("/api/admin/activity", (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const entries = filterActivityEntries(getActivityEntriesForAnalysis(), req.query)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 2000);
+  res.json({ ok: true, total: entries.length, entries: entries.slice(0, limit) });
+});
+
+app.get("/api/admin/activity/export", (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const entries = filterActivityEntries(getActivityEntriesForAnalysis(), req.query)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const format = String(req.query.format || "json").toLowerCase();
+  if (format === "csv") {
+    const rows = ["createdAt,date,time,message,runId,runStartedAt"];
+    entries.forEach((entry) => rows.push([
+      entry.createdAt,
+      entry.date,
+      entry.time,
+      entry.message,
+      entry.runId,
+      entry.runStartedAt
+    ].map(csvCell).join(",")));
+    sendDownload(res, "nastenka-live-feed.csv", `\uFEFF${rows.join("\n")}`, "text/csv");
+    return;
+  }
+
+  sendDownload(res, "nastenka-live-feed.json", JSON.stringify(entries, null, 2), "application/json");
+});
+
 app.post("/api/users/template-entry", (req, res) => {
   const username = sanitizeUser(req.body?.username);
   const email = sanitizeEmail(req.body?.email);
@@ -1928,9 +2050,15 @@ async function startServer() {
     firestoreSnapshots = remoteStorage.snapshots.sort((a, b) => (
       String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
     ));
-    firestoreActivity = remoteStorage.activity.sort((a, b) => (
-      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
-    ));
+    activityRuns.push(...(remoteStorage.activityRuns || []));
+    if (remoteStorage.legacyActivity?.length) {
+      activityRuns.push({
+        id: "legacy",
+        startedAt: "",
+        updatedAt: "",
+        entries: remoteStorage.legacyActivity
+      });
+    }
     console.log(`Používá se Firestore (${firestoreSnapshots.length} snapshotů, ${firestoreUsers.length} uživatelů).`);
   }
 
