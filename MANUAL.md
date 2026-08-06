@@ -8,7 +8,7 @@ Nástěnka Live je společná online plocha pro zadávání, delegování a sled
 2. Přihlaste se e-mailem a heslem.
 3. Pokud potřebujete pouze prohlížet plochu, můžete zvolit **Pokračovat jako host**.
 
-Host má přístup pouze pro náhled. Může si prohlížet tickety, feed a online uživatele a používat filtraci, ale nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, měnit texty, spravovat spojnice, ukládat nebo obnovovat snapshoty ani měnit heslo. Host nemá vlastní registrovaný účet ani heslo.
+Host má přístup pouze pro náhled. Po přihlášení se mu skryje levý nástrojový dock a editační ovládání ticketů. Může si prohlížet tickety, feed a online uživatele, ale nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, měnit texty, spravovat spojnice, ukládat nebo obnovovat snapshoty ani měnit heslo. Host nemá vlastní registrovaný účet ani heslo.
 
 Po přihlášení se v horní části zobrazí vaše jméno, počet online uživatelů a případně odkaz **Správa uživatelů**, pokud máte administrátorskou roli.
 
@@ -23,6 +23,8 @@ Vlevo je svislý dock s hlavními nástroji:
 - **Spojnice**: propojení dvou ticketů čárou.
 
 Po kliknutí na nástroj se otevře odpovídající panel. Dalším kliknutím lze panel zavřít.
+
+Nástrojový dock a editační ovládání jsou dostupné pouze přihlášeným uživatelům s oprávněním měnit obsah. Host v režimu náhledu vidí pouze plochu, feed, online uživatele a možnost odhlášení.
 
 ## 3. Vytvoření ticketu
 
@@ -77,7 +79,14 @@ Před trvalým smazáním aplikace zobrazí potvrzovací dialog.
 2. Klikněte na první ticket.
 3. Klikněte na druhý ticket.
 
-Mezi tickety se vytvoří spojnice. Opětovným použitím nástroje lze vytvořit další spojení. Spojnice jsou součástí snapshotů.
+Po výběru prvního ticketu se zvýrazní začátek spojnice a kurzor upozorní na režim přichycování. Mezi tickety se vytvoří spojnice, jejíž konce jsou umístěné s malým odstupem od hran ticketů. Při přesouvání nebo změně velikosti ticketu se její konce automaticky přepočítají.
+
+Kliknutím na existující spojnici ji vyberete. Poté můžete:
+
+- **Upravit spojnici**: ponechat první ticket a kliknutím zvolit nový koncový ticket,
+- **Smazat spojnici**: po potvrzení spojení trvale odstranit.
+
+Opětovným použitím nástroje lze vytvořit další spojení. Spojnice jsou součástí snapshotů.
 
 ## 7. Živý feed a online uživatelé
 
