@@ -151,6 +151,8 @@ const markSelectedDoneBtn = document.querySelector("#mark-selected-done-btn");
 const saveSessionBtn = document.querySelector("#save-session-btn");
 const restoreSnapshotSelect = document.querySelector("#restore-snapshot-select");
 const restoreSnapshotBtn = document.querySelector("#restore-snapshot-btn");
+const exportBackupBtn = document.querySelector("#export-backup-btn");
+const importBackupInput = document.querySelector("#import-backup-input");
 const boardActionStatus = document.querySelector("#board-action-status");
 const sessionSaveStatus = document.querySelector("#session-save-status");
 const notePreview = document.querySelector("#note-preview");
@@ -186,9 +188,11 @@ const toolDock = document.querySelector(".tool-dock");
 const toolDockPanel = document.querySelector("#tool-dock-panel");
 const dockToggleNote = document.querySelector("#dock-toggle-note");
 const dockToggleFilter = document.querySelector("#dock-toggle-filter");
+const dockToggleBackups = document.querySelector("#dock-toggle-backups");
 const connectNotesBtn = document.querySelector("#connect-notes-btn");
 const dockSectionNote = document.querySelector("#dock-section-note");
 const dockSectionFilter = document.querySelector("#dock-section-filter");
+const dockSectionBackups = document.querySelector("#dock-section-backups");
 const boardInlineComposer = document.querySelector("#board-inline-composer");
 const boardInlineTitle = document.querySelector("#board-inline-title");
 const boardInlineControlTitle = document.querySelector("#board-inline-control-title");
@@ -247,6 +251,75 @@ function normalizeNoteFormat(value) {
     size: NOTE_FORMAT_SIZES.includes(value?.size) ? value.size : "normal",
     align: NOTE_FORMAT_ALIGNS.includes(value?.align) ? value.align : "left"
   };
+}
+function downloadBoardBackup() {
+  if (!me) {
+    setBoardActionStatus("Nejdříve se přihlas.", true);
+    return;
+  }
+
+  const backup = {
+    format: "nastenka-live-backup",
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    exportedBy: me.name,
+    board: {
+      notes,
+      texts: boardTexts,
+      connections: noteConnections
+    }
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `nastenka-backup-${date}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  sessionSaveStatus?.replaceChildren(document.createTextNode("JSON záloha byla stažena."));
+  sessionSaveStatus?.classList.remove("is-error");
+}
+
+async function importBoardBackup(file) {
+  if (!me || !file) {
+    return;
+  }
+
+  try {
+    const backup = JSON.parse(await file.text());
+    const importedBoard = backup?.board;
+    if (backup?.format !== "nastenka-live-backup" || backup?.schemaVersion !== 1
+      || !Array.isArray(importedBoard?.notes)
+      || !Array.isArray(importedBoard?.texts)
+      || !Array.isArray(importedBoard?.connections)) {
+      throw new Error("Soubor nemá platný formát zálohy Nástěnky Live.");
+    }
+
+    const summary = `${importedBoard.notes.length} ticketů, ${importedBoard.texts.length} textů a ${importedBoard.connections.length} spojnic`;
+    if (!window.confirm(`Načíst zálohu se ${summary}? Současná plocha se před obnovou automaticky uloží.`)) {
+      return;
+    }
+
+    sessionSaveStatus?.replaceChildren(document.createTextNode("Načítám zálohu..."));
+    sessionSaveStatus?.classList.remove("is-error");
+    socket.emit("backup:import", { backup }, (response) => {
+      if (!response?.ok) {
+        sessionSaveStatus?.replaceChildren(document.createTextNode(response?.message || "Import zálohy se nepodařil."));
+        sessionSaveStatus?.classList.add("is-error");
+        return;
+      }
+      sessionSaveStatus?.replaceChildren(document.createTextNode(`Záloha obnovena (${summary}).`));
+      sessionSaveStatus?.classList.remove("is-error");
+      loadSnapshotOptions();
+      closeDockPanel();
+    });
+  } catch (error) {
+    sessionSaveStatus?.replaceChildren(document.createTextNode(error.message || "Soubor se nepodařilo načíst."));
+    sessionSaveStatus?.classList.add("is-error");
+  } finally {
+    importBackupInput.value = "";
+  }
 }
 
 function normalizeNoteStatus(value, doneFallback = false) {
@@ -1111,6 +1184,7 @@ function closeDockPanel() {
   setCreationControlsVisibility(false);
   dockToggleNote?.classList.remove("active");
   dockToggleFilter?.classList.remove("active");
+  dockToggleBackups?.classList.remove("active");
 }
 
 function openDockSection(section) {
@@ -1121,7 +1195,8 @@ function openDockSection(section) {
   const isAlreadyOpen = !toolDockPanel.classList.contains("hidden");
   const activeBtn =
     (dockToggleNote?.classList.contains("active") && "note") ||
-    (dockToggleFilter?.classList.contains("active") && "filter");
+    (dockToggleFilter?.classList.contains("active") && "filter") ||
+    (dockToggleBackups?.classList.contains("active") && "backups");
 
   if (isAlreadyOpen && activeBtn === section) {
     closeDockPanel();
@@ -1131,9 +1206,11 @@ function openDockSection(section) {
   toolDockPanel.classList.remove("hidden");
   dockSectionNote?.classList.toggle("hidden", section !== "note");
   dockSectionFilter?.classList.toggle("hidden", section !== "filter");
+  dockSectionBackups?.classList.toggle("hidden", section !== "backups");
 
   dockToggleNote?.classList.toggle("active", section === "note");
   dockToggleFilter?.classList.toggle("active", section === "filter");
+  dockToggleBackups?.classList.toggle("active", section === "backups");
   setCreationControlsVisibility(section === "note");
 }
 
@@ -3417,6 +3494,11 @@ dockToggleFilter?.addEventListener("click", () => {
   openDockSection("filter");
 });
 
+dockToggleBackups?.addEventListener("click", () => {
+  openDockSection("backups");
+  loadSnapshotOptions();
+});
+
 connectNotesBtn?.addEventListener("click", () => {
   setConnectionMode(!connectionMode);
 });
@@ -3674,6 +3756,11 @@ saveSessionBtn?.addEventListener("click", () => {
   sessionSaveStatus?.replaceChildren(document.createTextNode("Ukládám aktuální rozvržení..."));
   sessionSaveStatus?.classList.remove("is-error");
   socket.emit("session:saveSnapshot");
+});
+
+exportBackupBtn?.addEventListener("click", downloadBoardBackup);
+importBackupInput?.addEventListener("change", () => {
+  importBoardBackup(importBackupInput.files?.[0]);
 });
 
 restoreSnapshotBtn?.addEventListener("click", () => {
@@ -4602,23 +4689,6 @@ socket.on("notes:cleared", ({ removedCount }) => {
   closeNotePreview();
   renderBoard();
   setBoardActionStatus(`Smazáno lístků: ${removedCount}.`);
-});
-
-window.addEventListener("pagehide", () => {
-  if (!me) {
-    return;
-  }
-
-  fetch("/api/snapshots/save", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ savedBy: me.name }),
-    keepalive: true
-  }).catch(() => {
-    // Ignore network errors on page close.
-  });
 });
 
 window.addEventListener("pageshow", () => {

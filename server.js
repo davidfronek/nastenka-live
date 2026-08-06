@@ -44,6 +44,11 @@ const usersFilePath = path.join(dataDir, "users.json");
 let firestoreUsers = null;
 let firestoreSnapshots = [];
 const ACTIVITY_LIMIT = 30;
+const AUTOMATIC_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_IMPORTED_NOTES = 2000;
+const MAX_IMPORTED_TEXTS = 1000;
+const MAX_IMPORTED_CONNECTIONS = 4000;
+let lastAutomaticSnapshotSignature = "";
 const DONE_STACK_X = 2400;
 const DONE_STACK_Y = 430;
 const DONE_STACK_COLUMNS = 4;
@@ -1001,11 +1006,17 @@ function saveRegisteredUsers(users) {
   return Promise.resolve();
 }
 
-function saveBoardSnapshot(savedBy) {
+function getBoardStateSignature() {
+  return JSON.stringify({ notes, texts: boardTexts, connections: noteConnections });
+}
+
+function saveBoardSnapshot(savedBy, kind = "manual") {
   const snapshot = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
     savedBy,
+    kind,
+    schemaVersion: 1,
     noteCount: notes.length,
     textCount: boardTexts.length,
     connections: noteConnections,
@@ -1064,6 +1075,16 @@ function saveBoardSnapshot(savedBy) {
 
   fs.writeFileSync(dailySnapshotFilePath, `${JSON.stringify(allSnapshots, null, 2)}\n`, "utf-8");
   return snapshot;
+}
+
+function saveAutomaticSnapshotIfChanged() {
+  const signature = getBoardStateSignature();
+  if (signature === lastAutomaticSnapshotSignature) {
+    return;
+  }
+
+  saveBoardSnapshot("Automatický systém", "automatic");
+  lastAutomaticSnapshotSignature = signature;
 }
 
 function restoreBoardFromLatestSnapshot() {
@@ -1783,12 +1804,52 @@ io.on("connection", (socket) => {
     }
 
     const snapshot = saveBoardSnapshot(user.name);
+    lastAutomaticSnapshotSignature = getBoardStateSignature();
     socket.emit("session:saved", {
       id: snapshot.id,
       createdAt: snapshot.createdAt,
       noteCount: snapshot.noteCount
     });
     addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
+  });
+
+  socket.on("backup:import", ({ backup }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+
+    const importedBoard = backup?.board || backup;
+    if (!importedBoard || !Array.isArray(importedBoard.notes)
+      || !Array.isArray(importedBoard.texts) || !Array.isArray(importedBoard.connections)) {
+      ack?.({ ok: false, message: "Soubor není platná záloha nástěnky." });
+      return;
+    }
+    if (importedBoard.notes.length > MAX_IMPORTED_NOTES
+      || importedBoard.texts.length > MAX_IMPORTED_TEXTS
+      || importedBoard.connections.length > MAX_IMPORTED_CONNECTIONS) {
+      ack?.({ ok: false, message: "Záloha obsahuje příliš mnoho prvků." });
+      return;
+    }
+
+    saveBoardSnapshot(user.name, "pre-import");
+    const restored = restoreBoardFromSnapshot({
+      id: "imported",
+      notes: importedBoard.notes,
+      texts: importedBoard.texts,
+      connections: importedBoard.connections
+    });
+    if (!restored) {
+      ack?.({ ok: false, message: "Zálohu se nepodařilo načíst." });
+      return;
+    }
+
+    const snapshot = saveBoardSnapshot(user.name, "import");
+    lastAutomaticSnapshotSignature = getBoardStateSignature();
+    io.emit("board:init", { notes, texts: boardTexts, connections: noteConnections, activity });
+    addActivity(`${user.name} importoval/a zálohu (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
+    ack?.({ ok: true, ...restored });
   });
 
   socket.on("snapshot:restore", ({ id }, ack) => {
@@ -1810,9 +1871,11 @@ io.on("connection", (socket) => {
       return;
     }
 
+    lastAutomaticSnapshotSignature = getBoardStateSignature();
     io.emit("board:init", {
       notes,
       texts: boardTexts,
+      connections: noteConnections,
       activity
     });
     addActivity(`${user.name} obnovil/a snapshot z ${snapshot.createdAt || "neznámého data"} (${restored.noteCount} lístků, ${restored.textCount} textů)`);
@@ -2190,6 +2253,9 @@ async function startServer() {
       `Obnoven snapshot ${restoredSnapshot.id} (${restoredSnapshot.noteCount} listku, ${restoredSnapshot.textCount} textu) z ${restoredSnapshot.createdAt}.`
     );
   }
+
+  lastAutomaticSnapshotSignature = getBoardStateSignature();
+  setInterval(saveAutomaticSnapshotIfChanged, AUTOMATIC_SNAPSHOT_INTERVAL_MS);
 
   const PORT = process.env.PORT || 3099;
   server.listen(PORT, () => {

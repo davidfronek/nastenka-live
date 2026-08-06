@@ -915,6 +915,33 @@ button:focus-visible {
   border-left: none;
 }
 
+.backup-menu {
+  display: grid;
+  gap: 6px;
+}
+
+.backup-menu button,
+.backup-file-label,
+.backup-menu select {
+  width: 100%;
+}
+
+.backup-file-label {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  background: #475569;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.backup-file-label:hover {
+  background: #334155;
+}
+
 .note-menu,
 .filter-menu {
   display: grid;

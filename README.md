@@ -11,7 +11,7 @@ Klasicky fullstack projekt pro kolaborativni post-it nastenku.
 - oznaceni ukolu jako hotovy
 - mazani listku po jednom i hromadne (vsechny najednou)
 - zivy feed aktivity a seznam online uzivatelu
-- zaznam stavu nastenky pri ukonceni prace (pozice listku, pocet, popisy)
+- automaticke i rucni zalohy cele plochy vcetne spojnic a textovych prvku
 
 ## Struktura
 
@@ -27,13 +27,16 @@ Klasicky fullstack projekt pro kolaborativni post-it nastenku.
 
 Pro simulaci vice uzivatelu otevri stejnou adresu ve vice oknech nebo ruznych prohlizecich a prihlas kazdeho uzivatele zvlast.
 
-## Snapshoty po ukonceni prace
+## Snapshoty a zalohy plochy
 
-- Tlacitko "Ukoncit praci a ulozit snapshot" ulozi aktualni stav boardu.
-- Pri zavreni zalozky se snapshot uklada automaticky.
+- V levem docku otevri sekci "Zalohy".
+- Tlacitko "Ulozit snapshot nyni" ulozi rucni snapshot.
+- "Exportovat JSON" stahne prenositelny soubor `nastenka-backup-YYYY-MM-DD.json`.
+- Import nejprve zkontroluje format a po potvrzeni automaticky ulozi pojistny snapshot puvodni plochy.
+- Server uklada automaticky snapshot zmenene plochy jednou za 5 minut; navigace nebo zavreni zalozky uz nevytvari duplicitni snapshot.
 - Ulozene zaznamy jsou v dennim souboru `data/board-snapshots-YYYY-MM-DD.json`.
 - Pri startu serveru se automaticky obnovi posledni dostupny snapshot.
-- Kazdy zaznam obsahuje: cas ulozeni, uzivatele, pocet listku a detail kazdeho listku vcetne pozice `x` a `y`.
+- Snapshot obsahuje tickety, textove prvky, spojnice, formatovani, pozice, rozmery a metadata.
 
 ## Firebase / Firestore
 

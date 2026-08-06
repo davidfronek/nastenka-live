@@ -71,6 +71,14 @@
                 </svg>
               </span>
             </button>
+            <button id="dock-toggle-backups" class="dock-btn" type="button" aria-label="Zálohy" data-hint="Zálohy">
+              <span class="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                  <path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-7-7V3z"></path>
+                  <path d="M13 3h7v7h-2V6.4l-6.3 6.3-1.4-1.4L16.6 5H13z"></path>
+                </svg>
+              </span>
+            </button>
             <button id="connect-notes-btn" class="dock-btn" type="button" aria-label="Nakreslit spojnici" data-hint="Spojnice">
               <span class="dock-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
@@ -183,6 +191,31 @@
                     Zobrazit řešitele
                     <select id="assignee-filter"></select>
                   </label>
+                </div>
+              </div>
+            </div>
+
+            <div id="dock-section-backups" class="dock-section hidden">
+              <h2 class="section-icon" aria-label="Zálohy" title="Zálohy">
+                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                  <path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-7-7V3z"></path>
+                  <path d="M13 3h7v7h-2V6.4l-6.3 6.3-1.4-1.4L16.6 5H13z"></path>
+                </svg>
+              </h2>
+              <div class="dock-section-head dock-theme-backups">
+                <h3>Zálohy</h3>
+                <p>Ulož, stáhni nebo obnov celou plochu.</p>
+              </div>
+              <div class="filters compact themed-panel themed-panel-actions backup-menu">
+                <div class="control-card">
+                  <p class="control-title">Záchranná brzda</p>
+                  <button id="save-session-btn" type="button">Uložit snapshot nyní</button>
+                  <button id="export-backup-btn" class="secondary-btn" type="button">Exportovat JSON</button>
+                  <label class="backup-file-label" for="import-backup-input">Importovat JSON</label>
+                  <input id="import-backup-input" type="file" accept="application/json,.json" hidden />
+                  <select id="restore-snapshot-select" aria-label="Vyber snapshot k obnovení"></select>
+                  <button id="restore-snapshot-btn" class="secondary-btn" type="button">Obnovit uložený snapshot</button>
+                  <p id="session-save-status" class="session-save-status" aria-live="polite"></p>
                 </div>
               </div>
             </div>
