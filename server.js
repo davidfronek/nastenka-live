@@ -73,6 +73,7 @@ const DISCONNECT_LOG_DELAY_MS = 3000;
 
 function nowTime() {
   return new Date().toLocaleTimeString("cs-CZ", {
+    timeZone: "Europe/Prague",
     hour: "2-digit",
     minute: "2-digit"
   });
@@ -80,6 +81,7 @@ function nowTime() {
 
 function nowDate() {
   return new Date().toLocaleDateString("cs-CZ", {
+    timeZone: "Europe/Prague",
     day: "2-digit",
     month: "2-digit",
     year: "numeric"
@@ -88,6 +90,7 @@ function nowDate() {
 
 function nowLocalTimestamp(date = new Date()) {
   return date.toLocaleString("sv-SE", {
+    timeZone: "Europe/Prague",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
