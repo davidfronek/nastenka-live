@@ -26,6 +26,40 @@ const refreshButton = document.querySelector("#refresh-users");
 let currentUser = null;
 let sessionToken = "";
 let users = [];
+const AUTH_SESSION_STORAGE_KEY = "nastenka.live.sessionToken";
+const openedFromBoard = new URLSearchParams(window.location.search).get("from") === "board";
+
+function getStoredSessionToken() {
+  try {
+    return window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function clearStoredSessionToken() {
+  try {
+    window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+  } catch {
+    // Storage may be unavailable in restricted browser contexts.
+  }
+}
+
+function showAdminLogin(message = "") {
+  appView.classList.add("hidden");
+  loginView.classList.remove("hidden");
+  setStatus(loginStatus, message, Boolean(message));
+}
+
+function resumeBoardSession() {
+  sessionToken = getStoredSessionToken();
+  if (!openedFromBoard || !sessionToken) {
+    return;
+  }
+
+  loginView.classList.add("hidden");
+  socket.emit("auth:resume", { sessionToken });
+}
 
 function setStatus(element, message, isError = false) {
   element.textContent = message || "";
@@ -144,6 +178,12 @@ socket.on("auth:ok", (user) => {
   loadUsers();
 });
 
+socket.on("auth:required", () => {
+  clearStoredSessionToken();
+  sessionToken = "";
+  showAdminLogin("Relace vypršela. Přihlas se znovu.");
+});
+
 socket.on("auth:error", (message) => {
   setStatus(loginStatus, message || "Přihlášení selhalo.", true);
 });
@@ -154,6 +194,7 @@ socket.on("connect_error", () => {
 
 logoutButton.addEventListener("click", () => {
   socket.emit("auth:logout");
+  clearStoredSessionToken();
   sessionToken = "";
   currentUser = null;
   appView.classList.add("hidden");
@@ -215,3 +256,5 @@ userList.addEventListener("click", async (event) => {
 
 cancelEditButton.addEventListener("click", resetForm);
 refreshButton.addEventListener("click", loadUsers);
+
+resumeBoardSession();
