@@ -149,10 +149,7 @@ const deleteSelectedBtn = document.querySelector("#delete-selected-btn");
 const deleteDoneBtn = document.querySelector("#delete-done-btn");
 const markSelectedDoneBtn = document.querySelector("#mark-selected-done-btn");
 const saveSessionBtn = document.querySelector("#save-session-btn");
-const restoreSnapshotSelect = document.querySelector("#restore-snapshot-select");
-const restoreSnapshotBtn = document.querySelector("#restore-snapshot-btn");
-const exportBackupBtn = document.querySelector("#export-backup-btn");
-const importBackupInput = document.querySelector("#import-backup-input");
+const restoreLatestSnapshotBtn = document.querySelector("#restore-latest-snapshot-btn");
 const boardActionStatus = document.querySelector("#board-action-status");
 const sessionSaveStatus = document.querySelector("#session-save-status");
 const notePreview = document.querySelector("#note-preview");
@@ -252,76 +249,6 @@ function normalizeNoteFormat(value) {
     align: NOTE_FORMAT_ALIGNS.includes(value?.align) ? value.align : "left"
   };
 }
-function downloadBoardBackup() {
-  if (!me) {
-    setBoardActionStatus("Nejdříve se přihlas.", true);
-    return;
-  }
-
-  const backup = {
-    format: "nastenka-live-backup",
-    schemaVersion: 1,
-    exportedAt: new Date().toISOString(),
-    exportedBy: me.name,
-    board: {
-      notes,
-      texts: boardTexts,
-      connections: noteConnections
-    }
-  };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  const date = new Date().toISOString().slice(0, 10);
-  link.href = url;
-  link.download = `nastenka-backup-${date}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-  sessionSaveStatus?.replaceChildren(document.createTextNode("JSON záloha byla stažena."));
-  sessionSaveStatus?.classList.remove("is-error");
-}
-
-async function importBoardBackup(file) {
-  if (!me || !file) {
-    return;
-  }
-
-  try {
-    const backup = JSON.parse(await file.text());
-    const importedBoard = backup?.board;
-    if (backup?.format !== "nastenka-live-backup" || backup?.schemaVersion !== 1
-      || !Array.isArray(importedBoard?.notes)
-      || !Array.isArray(importedBoard?.texts)
-      || !Array.isArray(importedBoard?.connections)) {
-      throw new Error("Soubor nemá platný formát zálohy Nástěnky Live.");
-    }
-
-    const summary = `${importedBoard.notes.length} ticketů, ${importedBoard.texts.length} textů a ${importedBoard.connections.length} spojnic`;
-    if (!window.confirm(`Načíst zálohu se ${summary}? Současná plocha se před obnovou automaticky uloží.`)) {
-      return;
-    }
-
-    sessionSaveStatus?.replaceChildren(document.createTextNode("Načítám zálohu..."));
-    sessionSaveStatus?.classList.remove("is-error");
-    socket.emit("backup:import", { backup }, (response) => {
-      if (!response?.ok) {
-        sessionSaveStatus?.replaceChildren(document.createTextNode(response?.message || "Import zálohy se nepodařil."));
-        sessionSaveStatus?.classList.add("is-error");
-        return;
-      }
-      sessionSaveStatus?.replaceChildren(document.createTextNode(`Záloha obnovena (${summary}).`));
-      sessionSaveStatus?.classList.remove("is-error");
-      loadSnapshotOptions();
-      closeDockPanel();
-    });
-  } catch (error) {
-    sessionSaveStatus?.replaceChildren(document.createTextNode(error.message || "Soubor se nepodařilo načíst."));
-    sessionSaveStatus?.classList.add("is-error");
-  } finally {
-    importBackupInput.value = "";
-  }
-}
-
 function normalizeNoteStatus(value, doneFallback = false) {
   if (value === "done" || value === "active") {
     return value;
@@ -1451,14 +1378,12 @@ async function loadRegisteredUsers() {
 }
 
 async function loadSnapshotOptions() {
-  if (!restoreSnapshotSelect) {
+  if (!restoreLatestSnapshotBtn) {
     return;
   }
 
-  restoreSnapshotSelect.innerHTML = "";
-
   try {
-    const response = await fetch("/api/snapshots", {
+    const response = await fetch("/api/snapshots/latest", {
       headers: {
         Accept: "application/json"
       }
@@ -1469,31 +1394,9 @@ async function loadSnapshotOptions() {
     }
 
     const payload = await response.json();
-    const snapshots = Array.isArray(payload?.snapshots) ? payload.snapshots : [];
-
-    if (snapshots.length === 0) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "Žádná záloha není k dispozici";
-      restoreSnapshotSelect.append(option);
-      restoreSnapshotBtn?.setAttribute("disabled", "disabled");
-      return;
-    }
-
-    snapshots.forEach((snapshot) => {
-      const option = document.createElement("option");
-      option.value = snapshot.id;
-      const date = snapshot.createdAt ? new Date(snapshot.createdAt).toLocaleString("cs-CZ") : "bez data";
-      option.textContent = `${date} - ${snapshot.noteCount || 0} lístků, ${snapshot.textCount || 0} textů`;
-      restoreSnapshotSelect.append(option);
-    });
-    restoreSnapshotBtn?.removeAttribute("disabled");
+    restoreLatestSnapshotBtn.disabled = !payload?.latest;
   } catch {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "Zálohy se nepodařilo načíst";
-    restoreSnapshotSelect.append(option);
-    restoreSnapshotBtn?.setAttribute("disabled", "disabled");
+    restoreLatestSnapshotBtn.disabled = true;
   }
 }
 
@@ -3758,31 +3661,28 @@ saveSessionBtn?.addEventListener("click", () => {
   socket.emit("session:saveSnapshot");
 });
 
-exportBackupBtn?.addEventListener("click", downloadBoardBackup);
-importBackupInput?.addEventListener("change", () => {
-  importBoardBackup(importBackupInput.files?.[0]);
-});
-
-restoreSnapshotBtn?.addEventListener("click", () => {
+restoreLatestSnapshotBtn?.addEventListener("click", async () => {
   if (!me) {
     setBoardActionStatus("Nejdříve se přihlas.", true);
     return;
   }
 
-  const snapshotId = restoreSnapshotSelect?.value || "";
-  if (!snapshotId) {
-    setBoardActionStatus("Vyber snapshot k obnovení.", true);
+  const response = await fetch("/api/snapshots/latest", { headers: { Accept: "application/json" } });
+  const payload = await response.json().catch(() => ({}));
+  const snapshot = payload?.latest;
+  if (!snapshot?.id) {
+    setBoardActionStatus("Poslední snapshot není k dispozici.", true);
     return;
   }
 
-  const selectedLabel = restoreSnapshotSelect?.selectedOptions?.[0]?.textContent || "vybranou zálohu";
-  const ok = window.confirm(`Obnovit snapshot ${selectedLabel}? Aktuální plocha se nahradí obsahem zálohy.`);
+  const date = snapshot.createdAt ? new Date(snapshot.createdAt).toLocaleString("cs-CZ") : "bez data";
+  const ok = window.confirm(`Obnovit poslední snapshot z ${date}? Aktuální plocha se nahradí obsahem zálohy.`);
   if (!ok) {
     return;
   }
 
   setBoardActionStatus("Obnovuji snapshot...", false);
-  socket.emit("snapshot:restore", { id: snapshotId }, (response) => {
+  socket.emit("snapshot:restore", { id: snapshot.id }, (response) => {
     if (!response?.ok) {
       setBoardActionStatus(response?.message || "Obnovení snapshotu se nepodařilo.", true);
       return;

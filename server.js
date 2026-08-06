@@ -12,6 +12,7 @@ const {
   loadUsers: loadUsersFromFirestore,
   saveUsers: saveUsersToFirestore,
   saveSnapshot: saveSnapshotToFirestore,
+  deleteSnapshots: deleteSnapshotsFromFirestore,
   saveActivityRun: saveActivityRunToFirestore
 } = require("./firestore-storage");
 
@@ -44,10 +45,8 @@ const usersFilePath = path.join(dataDir, "users.json");
 let firestoreUsers = null;
 let firestoreSnapshots = [];
 const ACTIVITY_LIMIT = 30;
+const SNAPSHOT_LIMIT = 3;
 const AUTOMATIC_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
-const MAX_IMPORTED_NOTES = 2000;
-const MAX_IMPORTED_TEXTS = 1000;
-const MAX_IMPORTED_CONNECTIONS = 4000;
 let lastAutomaticSnapshotSignature = "";
 const DONE_STACK_X = 2400;
 const DONE_STACK_Y = 430;
@@ -1064,16 +1063,30 @@ function saveBoardSnapshot(savedBy, kind = "manual") {
   const dailySnapshotFilePath = getSnapshotFilePath();
   if (isFirestoreEnabled()) {
     firestoreSnapshots.unshift(snapshot);
+    firestoreSnapshots.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const removedSnapshots = firestoreSnapshots.splice(SNAPSHOT_LIMIT);
     saveSnapshotToFirestore(snapshot).catch((error) => {
       console.error(`Uložení snapshotu do Firestore selhalo: ${error.message}`);
+    });
+    deleteSnapshotsFromFirestore(removedSnapshots.map((item) => item.id)).catch((error) => {
+      console.error(`Mazání starších snapshotů z Firestore selhalo: ${error.message}`);
     });
     return snapshot;
   }
 
-  const allSnapshots = readSnapshots(dailySnapshotFilePath);
-  allSnapshots.unshift(snapshot);
+  const allSnapshots = listSnapshotFilePaths()
+    .flatMap((filePath) => readSnapshots(filePath))
+    .concat(snapshot)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, SNAPSHOT_LIMIT);
 
-  fs.writeFileSync(dailySnapshotFilePath, `${JSON.stringify(allSnapshots, null, 2)}\n`, "utf-8");
+  listSnapshotFilePaths().forEach((filePath) => {
+    fs.writeFileSync(filePath, "[]\n", "utf-8");
+  });
+  const snapshotsForToday = allSnapshots.filter((item) => (
+    String(item.createdAt || "").slice(0, 10) === formatSnapshotDate()
+  ));
+  fs.writeFileSync(dailySnapshotFilePath, `${JSON.stringify(snapshotsForToday, null, 2)}\n`, "utf-8");
   return snapshot;
 }
 
@@ -1085,6 +1098,29 @@ function saveAutomaticSnapshotIfChanged() {
 
   saveBoardSnapshot("Automatický systém", "automatic");
   lastAutomaticSnapshotSignature = signature;
+}
+
+function trimStoredSnapshots() {
+  if (isFirestoreEnabled()) {
+    firestoreSnapshots.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const removedSnapshots = firestoreSnapshots.splice(SNAPSHOT_LIMIT);
+    deleteSnapshotsFromFirestore(removedSnapshots.map((item) => item.id)).catch((error) => {
+      console.error(`Mazání starších snapshotů z Firestore selhalo: ${error.message}`);
+    });
+    return;
+  }
+
+  const snapshots = listSnapshotFilePaths()
+    .flatMap((filePath) => readSnapshots(filePath))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, SNAPSHOT_LIMIT);
+  listSnapshotFilePaths().forEach((filePath) => fs.writeFileSync(filePath, "[]\n", "utf-8"));
+  snapshots.forEach((snapshot) => {
+    const filePath = getSnapshotFilePath(new Date(snapshot.createdAt));
+    const current = readSnapshots(filePath);
+    current.push(snapshot);
+    fs.writeFileSync(filePath, `${JSON.stringify(current, null, 2)}\n`, "utf-8");
+  });
 }
 
 function restoreBoardFromLatestSnapshot() {
@@ -1843,45 +1879,6 @@ io.on("connection", (socket) => {
     addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
   });
 
-  socket.on("backup:import", ({ backup }, ack) => {
-    const user = usersBySocket.get(socket.id);
-    if (!user) {
-      ack?.({ ok: false, message: "Nejdříve se přihlas." });
-      return;
-    }
-
-    const importedBoard = backup?.board || backup;
-    if (!importedBoard || !Array.isArray(importedBoard.notes)
-      || !Array.isArray(importedBoard.texts) || !Array.isArray(importedBoard.connections)) {
-      ack?.({ ok: false, message: "Soubor není platná záloha nástěnky." });
-      return;
-    }
-    if (importedBoard.notes.length > MAX_IMPORTED_NOTES
-      || importedBoard.texts.length > MAX_IMPORTED_TEXTS
-      || importedBoard.connections.length > MAX_IMPORTED_CONNECTIONS) {
-      ack?.({ ok: false, message: "Záloha obsahuje příliš mnoho prvků." });
-      return;
-    }
-
-    saveBoardSnapshot(user.name, "pre-import");
-    const restored = restoreBoardFromSnapshot({
-      id: "imported",
-      notes: importedBoard.notes,
-      texts: importedBoard.texts,
-      connections: importedBoard.connections
-    });
-    if (!restored) {
-      ack?.({ ok: false, message: "Zálohu se nepodařilo načíst." });
-      return;
-    }
-
-    const snapshot = saveBoardSnapshot(user.name, "import");
-    lastAutomaticSnapshotSignature = getBoardStateSignature();
-    io.emit("board:init", { notes, texts: boardTexts, connections: noteConnections, activity });
-    addActivity(`${user.name} importoval/a zálohu (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
-    ack?.({ ok: true, ...restored });
-  });
-
   socket.on("snapshot:restore", ({ id }, ack) => {
     const user = usersBySocket.get(socket.id);
     if (!user) {
@@ -2267,8 +2264,13 @@ async function startServer() {
     firestoreSnapshots = remoteStorage.snapshots.sort((a, b) => (
       String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
     ));
+    trimStoredSnapshots();
     activityRuns.push(...(remoteStorage.activityRuns || []));
     console.log(`Používá se Firestore (${firestoreSnapshots.length} snapshotů, ${firestoreUsers.length} uživatelů).`);
+  }
+
+  if (!isFirestoreEnabled()) {
+    trimStoredSnapshots();
   }
 
   const restoredActivity = readLatestActivityEntries();

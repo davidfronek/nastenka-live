@@ -103,6 +103,15 @@ async function saveSnapshot(snapshot) {
   await db.collection("nastenka/snapshots/items").doc(String(snapshot.id)).set(snapshot);
 }
 
+async function deleteSnapshots(ids) {
+  const db = assertEnabled();
+  const batch = db.batch();
+  ids.forEach((id) => batch.delete(db.collection("nastenka/snapshots/items").doc(String(id))));
+  if (ids.length > 0) {
+    await batch.commit();
+  }
+}
+
 async function saveActivityRun(run) {
   const db = assertEnabled();
   await db.collection("nastenka/activity/runs").doc(String(run.id)).set(run);
@@ -115,5 +124,6 @@ module.exports = {
   loadUsers,
   saveUsers,
   saveSnapshot,
+  deleteSnapshots,
   saveActivityRun
 };

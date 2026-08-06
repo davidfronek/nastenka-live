@@ -31,9 +31,9 @@ Pro simulaci vice uzivatelu otevri stejnou adresu ve vice oknech nebo ruznych pr
 
 - V levem docku otevri sekci "Zalohy".
 - Tlacitko "Ulozit snapshot nyni" ulozi rucni snapshot.
-- "Exportovat JSON" stahne prenositelny soubor `nastenka-backup-YYYY-MM-DD.json`.
-- Import nejprve zkontroluje format a po potvrzeni automaticky ulozi pojistny snapshot puvodni plochy.
+- Tlacitko "Obnovit posledni snapshot" obnovi nejmladsi ulozenou zalohu.
 - Server uklada automaticky snapshot zmenene plochy jednou za 5 minut; navigace nebo zavreni zalozky uz nevytvari duplicitni snapshot.
+- Uchovavaji se pouze posledni 3 snapshoty. Pri startu se starsi historicke zaznamy automaticky odstrani.
 - Ulozene zaznamy jsou v dennim souboru `data/board-snapshots-YYYY-MM-DD.json`.
 - Pri startu serveru se automaticky obnovi posledni dostupny snapshot.
 - Snapshot obsahuje tickety, textove prvky, spojnice, formatovani, pozice, rozmery a metadata.
