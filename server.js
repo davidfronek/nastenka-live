@@ -8,11 +8,11 @@ const { Server } = require("socket.io");
 const {
   isFirestoreEnabled,
   initializeFirestoreStorage,
+  loadActivityRuns: loadActivityRunsFromFirestore,
   loadUsers: loadUsersFromFirestore,
   saveUsers: saveUsersToFirestore,
   saveSnapshot: saveSnapshotToFirestore,
-  saveActivityRun: saveActivityRunToFirestore,
-  deleteLegacyActivityEntries: deleteLegacyActivityEntriesFromFirestore
+  saveActivityRun: saveActivityRunToFirestore
 } = require("./firestore-storage");
 
 const app = express();
@@ -907,12 +907,21 @@ function getActivityEntriesForAnalysis() {
   });
 }
 
+async function refreshActivityRuns() {
+  if (!isFirestoreEnabled()) {
+    return;
+  }
+
+  const latestRuns = await loadActivityRunsFromFirestore();
+  activityRuns.splice(0, activityRuns.length, ...latestRuns);
+  activity.splice(0, activity.length, ...(latestRuns.find((run) => run.id === activityRunId)?.entries || []));
+}
+
 async function deleteActivityEntries(entries) {
   const selected = new Set(entries.map((entry) => `${String(entry.runId)}:${String(entry.id)}`));
   let deletedCount = 0;
 
   if (isFirestoreEnabled()) {
-    const legacyIds = [];
     const runsToSave = [];
     activityRuns.forEach((run) => {
       const keptEntries = (Array.isArray(run.entries) ? run.entries : []).filter((entry) => {
@@ -920,14 +929,11 @@ async function deleteActivityEntries(entries) {
         if (!selected.has(key)) {
           return true;
         }
-        if (run.id === "legacy") {
-          legacyIds.push(entry.id);
-        }
         deletedCount += 1;
         return false;
       });
 
-      if (keptEntries.length !== (run.entries || []).length && run.id !== "legacy") {
+      if (keptEntries.length !== (run.entries || []).length) {
         run.entries = keptEntries;
         run.updatedAt = nowLocalTimestamp();
         runsToSave.push(saveActivityRunToFirestore(run));
@@ -935,10 +941,6 @@ async function deleteActivityEntries(entries) {
     });
 
     await Promise.all(runsToSave);
-    if (legacyIds.length > 0) {
-      const legacyDeletedCount = await deleteLegacyActivityEntriesFromFirestore(legacyIds);
-      deletedCount = deletedCount - legacyIds.length + legacyDeletedCount;
-    }
     activity.splice(0, activity.length, ...(activityRuns.find((run) => run.id === activityRunId)?.entries || []));
   } else {
     listActivityFilePaths().forEach((filePath) => {
@@ -2031,15 +2033,20 @@ app.get("/api/admin/snapshots/export", (req, res) => {
   sendDownload(res, "nastenka-snapshoty.json", JSON.stringify(snapshots, null, 2), "application/json");
 });
 
-app.get("/api/admin/activity", (req, res) => {
+app.get("/api/admin/activity", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
   }
 
-  const entries = filterActivityEntries(getActivityEntriesForAnalysis(), req.query)
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 2000);
-  res.json({ ok: true, total: entries.length, entries: entries.slice(0, limit) });
+  try {
+    await refreshActivityRuns();
+    const entries = filterActivityEntries(getActivityEntriesForAnalysis(), req.query)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 2000);
+    res.json({ ok: true, total: entries.length, entries: entries.slice(0, limit) });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: `Načtení feedu se nepodařilo: ${error.message}` });
+  }
 });
 
 app.delete("/api/admin/activity", async (req, res) => {
@@ -2058,6 +2065,7 @@ app.delete("/api/admin/activity", async (req, res) => {
   }
 
   try {
+    await refreshActivityRuns();
     const deletedCount = await deleteActivityEntries(validEntries);
     io.emit("activity:list", activity);
     res.json({ ok: true, deletedCount });
@@ -2066,29 +2074,34 @@ app.delete("/api/admin/activity", async (req, res) => {
   }
 });
 
-app.get("/api/admin/activity/export", (req, res) => {
+app.get("/api/admin/activity/export", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
   }
 
-  const entries = filterActivityEntries(getActivityEntriesForAnalysis(), req.query)
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  const format = String(req.query.format || "json").toLowerCase();
-  if (format === "csv") {
-    const rows = ["createdAt,date,time,message,runId,runStartedAt"];
-    entries.forEach((entry) => rows.push([
-      entry.createdAt,
-      entry.date,
-      entry.time,
-      entry.message,
-      entry.runId,
-      entry.runStartedAt
-    ].map(csvCell).join(",")));
-    sendDownload(res, "nastenka-live-feed.csv", `\uFEFF${rows.join("\n")}`, "text/csv");
-    return;
-  }
+  try {
+    await refreshActivityRuns();
+    const entries = filterActivityEntries(getActivityEntriesForAnalysis(), req.query)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const format = String(req.query.format || "json").toLowerCase();
+    if (format === "csv") {
+      const rows = ["createdAt,date,time,message,runId,runStartedAt"];
+      entries.forEach((entry) => rows.push([
+        entry.createdAt,
+        entry.date,
+        entry.time,
+        entry.message,
+        entry.runId,
+        entry.runStartedAt
+      ].map(csvCell).join(",")));
+      sendDownload(res, "nastenka-live-feed.csv", `\uFEFF${rows.join("\n")}`, "text/csv");
+      return;
+    }
 
-  sendDownload(res, "nastenka-live-feed.json", JSON.stringify(entries, null, 2), "application/json");
+    sendDownload(res, "nastenka-live-feed.json", JSON.stringify(entries, null, 2), "application/json");
+  } catch (error) {
+    res.status(500).json({ ok: false, message: `Export feedu se nepodařil: ${error.message}` });
+  }
 });
 
 app.post("/api/users/template-entry", (req, res) => {
@@ -2144,14 +2157,6 @@ async function startServer() {
       String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
     ));
     activityRuns.push(...(remoteStorage.activityRuns || []));
-    if (remoteStorage.legacyActivity?.length) {
-      activityRuns.push({
-        id: "legacy",
-        startedAt: "",
-        updatedAt: "",
-        entries: remoteStorage.legacyActivity
-      });
-    }
     console.log(`Používá se Firestore (${firestoreSnapshots.length} snapshotů, ${firestoreUsers.length} uživatelů).`);
   }
 

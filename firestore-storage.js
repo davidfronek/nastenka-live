@@ -54,19 +54,23 @@ async function initializeFirestoreStorage() {
     return null;
   }
 
-  const [usersSnapshot, snapshotsSnapshot, activityRunsSnapshot, legacyActivitySnapshot] = await Promise.all([
+  const [usersSnapshot, snapshotsSnapshot, activityRunsSnapshot] = await Promise.all([
     db.collection("nastenka/config/users").get(),
     db.collection("nastenka/snapshots/items").orderBy("createdAt", "desc").get(),
-    db.collection("nastenka/activity/runs").orderBy("startedAt", "desc").get(),
-    db.collection("nastenka/activity/items").orderBy("createdAt", "desc").get()
+    db.collection("nastenka/activity/runs").orderBy("startedAt", "desc").get()
   ]);
 
   return {
     users: usersSnapshot.docs.map((item) => item.data()),
     snapshots: snapshotsSnapshot.docs.map((item) => item.data()),
-    activityRuns: activityRunsSnapshot.docs.map((item) => item.data()),
-    legacyActivity: legacyActivitySnapshot.docs.map((item) => item.data())
+    activityRuns: activityRunsSnapshot.docs.map((item) => item.data())
   };
+}
+
+async function loadActivityRuns() {
+  const db = assertEnabled();
+  const snapshot = await db.collection("nastenka/activity/runs").orderBy("startedAt", "desc").get();
+  return snapshot.docs.map((item) => item.data());
 }
 
 async function loadUsers() {
@@ -104,33 +108,12 @@ async function saveActivityRun(run) {
   await db.collection("nastenka/activity/runs").doc(String(run.id)).set(run);
 }
 
-async function deleteLegacyActivityEntries(ids) {
-  const db = assertEnabled();
-  const idSet = new Set(ids.map((id) => String(id)));
-  const collection = db.collection("nastenka/activity/items");
-  const snapshot = await collection.get();
-  const batch = db.batch();
-  let deletedCount = 0;
-
-  snapshot.docs.forEach((item) => {
-    if (idSet.has(String(item.id)) || idSet.has(String(item.data()?.id))) {
-      batch.delete(item.ref);
-      deletedCount += 1;
-    }
-  });
-
-  if (deletedCount > 0) {
-    await batch.commit();
-  }
-  return deletedCount;
-}
-
 module.exports = {
   isFirestoreEnabled,
   initializeFirestoreStorage,
+  loadActivityRuns,
   loadUsers,
   saveUsers,
   saveSnapshot,
-  saveActivityRun,
-  deleteLegacyActivityEntries
+  saveActivityRun
 };
