@@ -22,6 +22,7 @@ button, input, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 .hidden { display: none !important; }
+html.admin-session-pending #admin-login { display: none; }
 .admin-shell { width: min(1180px, 100%); margin: 0 auto; padding: 28px 24px 64px; }
 .admin-login {
   width: min(460px, 100%);

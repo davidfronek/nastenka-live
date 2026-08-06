@@ -8,6 +8,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./admin.css" />
+    <script>
+      try {
+        const fromBoard = new URLSearchParams(window.location.search).get("from") === "board";
+        const hasSession = Boolean(window.localStorage.getItem("nastenka.live.sessionToken"));
+        if (fromBoard && hasSession) {
+          document.documentElement.classList.add("admin-session-pending");
+        }
+      } catch {
+        // Keep the login visible when browser storage is unavailable.
+      }
+    </script>
   </head>
   <body>
     <main class="admin-shell">

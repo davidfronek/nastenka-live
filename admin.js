@@ -46,6 +46,7 @@ function clearStoredSessionToken() {
 }
 
 function showAdminLogin(message = "") {
+  document.documentElement.classList.remove("admin-session-pending");
   appView.classList.add("hidden");
   loginView.classList.remove("hidden");
   setStatus(loginStatus, message, Boolean(message));
@@ -172,6 +173,7 @@ socket.on("auth:ok", (user) => {
   }
   currentUser = user;
   sessionToken = user.sessionToken || "";
+  document.documentElement.classList.remove("admin-session-pending");
   loginView.classList.add("hidden");
   appView.classList.remove("hidden");
   identity.textContent = `Přihlášen: ${user.name} · ${user.email}`;
