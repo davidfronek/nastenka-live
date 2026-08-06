@@ -390,6 +390,18 @@ function getDoneStackPosition(currentNoteId = null) {
   };
 }
 
+function reflowDoneNotes() {
+  notes
+    .filter((note) => getNoteStatus(note) === "done")
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .forEach((note, index) => {
+      const column = index % DONE_STACK_COLUMNS;
+      const row = Math.floor(index / DONE_STACK_COLUMNS);
+      note.x = DONE_STACK_X + column * (NOTE_DEFAULT_WIDTH + DONE_STACK_GAP_X);
+      note.y = DONE_STACK_Y + row * (NOTE_DEFAULT_HEIGHT + DONE_STACK_GAP_Y);
+    });
+}
+
 function removeConnectionsForNote(noteId) {
   const removed = noteConnections.filter((connection) => connection.fromId === noteId || connection.toId === noteId);
   if (removed.length > 0) {
@@ -1773,7 +1785,10 @@ io.on("connection", (socket) => {
       removeConnectionsForNote(note.id);
     }
 
-    io.emit("note:updated", note);
+    reflowDoneNotes();
+    notes
+      .filter((item) => getNoteStatus(item) === "done" || item.id === note.id)
+      .forEach((item) => io.emit("note:updated", item));
     addActivity(
       nextStatus === "done"
         ? `${user.name} přesunul/a ticket: "${textSnippet(note.text, 36)}" pro ${note.to} do vyřešených`

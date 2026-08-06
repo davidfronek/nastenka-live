@@ -3202,6 +3202,11 @@ function createStickyElement(note) {
 function renderBoard() {
   const fragment = document.createDocumentFragment();
 
+  getVisibleNotes().forEach((note) => {
+    const bounds = getNoteBounds(note);
+    ensureCanvasForPosition(note.x, note.y, bounds.width, bounds.height);
+  });
+
   boardTexts.forEach((item) => {
     try {
       fragment.append(createBoardTextElement(item));
