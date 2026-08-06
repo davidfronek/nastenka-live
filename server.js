@@ -1519,12 +1519,12 @@ io.on("connection", (socket) => {
     }
 
     if (getNoteStatus(note) !== "active") {
-      ack?.({ ok: false, message: "Velikost můžeš měnit jen u aktivního lístku na ploše." });
+      ack?.({ ok: false, message: "Velikost můžeš měnit jen u aktivního ticketu na ploše." });
       return;
     }
 
     if (!canManageNote(user, note)) {
-      ack?.({ ok: false, message: "Velikost tohoto lístku může změnit jen jeho autor nebo admin." });
+      ack?.({ ok: false, message: "Velikost tohoto ticketu může změnit jen jeho autor nebo admin." });
       return;
     }
 
@@ -1536,7 +1536,7 @@ io.on("connection", (socket) => {
 
     io.emit("note:resized", { id: note.id, width: note.width, height: note.height });
     if (sizeChanged && shouldLogNoteResizeActivity(user, note)) {
-      addActivity(`${user.name} změnil/a velikost lístku: "${textSnippet(note.text)}" pro ${note.to}`);
+      addActivity(`${user.name} změnil/a velikost ticketu: "${textSnippet(note.text)}" pro ${note.to}`);
     }
     ack?.({ ok: true, note });
   });
@@ -1680,7 +1680,7 @@ io.on("connection", (socket) => {
 
     const text = sanitizeRichText(payload?.text);
     if (!text) {
-      ack?.({ ok: false, message: "Doplň text lístku." });
+      ack?.({ ok: false, message: "Doplň text ticketu." });
       return;
     }
 
@@ -1750,7 +1750,7 @@ io.on("connection", (socket) => {
       : [];
 
     if (uniqueIds.length === 0) {
-      ack?.({ ok: false, message: "Nejsou vybrané žádné lístky." });
+      ack?.({ ok: false, message: "Nejsou vybrané žádné tickety." });
       return;
     }
 
@@ -1774,7 +1774,7 @@ io.on("connection", (socket) => {
     });
 
     if (removedCount > 0) {
-      addActivity(`${user.name} hromadně smazal/a vybrané lístky (${removedCount})`);
+      addActivity(`${user.name} hromadně smazal/a vybrané tickety (${removedCount})`);
     }
 
     ack?.({ ok: true, removedCount, deniedCount });
@@ -1792,7 +1792,7 @@ io.on("connection", (socket) => {
       : [];
 
     if (uniqueIds.length === 0) {
-      ack?.({ ok: false, message: "Nejsou vybrané žádné lístky." });
+      ack?.({ ok: false, message: "Nejsou vybrané žádné tickety." });
       return;
     }
 
@@ -1828,7 +1828,7 @@ io.on("connection", (socket) => {
     });
 
     if (updatedCount > 0) {
-      addActivity(`${user.name} hromadně přesunul/a lístky do vyřešených (${updatedCount})`);
+      addActivity(`${user.name} hromadně přesunul/a tickety do vyřešených (${updatedCount})`);
     }
 
     ack?.({ ok: true, updatedCount, deniedCount, alreadyDoneCount });
@@ -1858,7 +1858,7 @@ io.on("connection", (socket) => {
       io.emit("note:deleted", { id: removed.id });
     });
 
-    addActivity(`${user.name} smazal/a všechny aktivní lístky (${removedCount})`);
+    addActivity(`${user.name} smazal/a všechny aktivní tickety (${removedCount})`);
     ack?.({ ok: true, removedCount });
   });
 
@@ -1876,7 +1876,7 @@ io.on("connection", (socket) => {
       createdAt: snapshot.createdAt,
       noteCount: snapshot.noteCount
     });
-    addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
+    addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
   });
 
   socket.on("snapshot:restore", ({ id }, ack) => {
@@ -1905,7 +1905,7 @@ io.on("connection", (socket) => {
       connections: noteConnections,
       activity
     });
-    addActivity(`${user.name} obnovil/a snapshot z ${snapshot.createdAt || "neznámého data"} (${restored.noteCount} lístků, ${restored.textCount} textů)`);
+    addActivity(`${user.name} obnovil/a snapshot z ${snapshot.createdAt || "neznámého data"} (${restored.noteCount} ticketů, ${restored.textCount} textů)`);
     ack?.({ ok: true, ...restored });
   });
 
@@ -1939,7 +1939,7 @@ app.get("/health", (_req, res) => {
 app.post("/api/snapshots/save", (req, res) => {
   const savedBy = sanitizeUser(req.body?.savedBy) || "Neznámý uživatel";
   const snapshot = saveBoardSnapshot(savedBy);
-  addActivity(`${savedBy} uložil/a snapshot (${snapshot.noteCount} lístků, ${snapshot.textCount} textů)`);
+  addActivity(`${savedBy} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
   res.json({
     ok: true,
     id: snapshot.id,
@@ -1957,6 +1957,45 @@ app.get("/api/users", (_req, res) => {
     createdAt: item.createdAt || null
   }));
   res.json({ users });
+});
+
+app.patch("/api/account/password", async (req, res) => {
+  const sessionUser = getRequestUser(req);
+  if (!sessionUser) {
+    res.status(401).json({ ok: false, message: "Nejdříve se přihlas." });
+    return;
+  }
+
+  const currentPassword = sanitizePassword(req.body?.currentPassword);
+  const newPassword = sanitizePassword(req.body?.newPassword);
+  const confirmation = sanitizePassword(req.body?.confirmation);
+  if (!currentPassword || newPassword.length < 6 || newPassword.length > 120) {
+    res.status(400).json({ ok: false, message: "Zadej aktuální heslo a nové heslo dlouhé alespoň 6 znaků." });
+    return;
+  }
+  if (newPassword !== confirmation) {
+    res.status(400).json({ ok: false, message: "Nová hesla se neshodují." });
+    return;
+  }
+  if (currentPassword === newPassword) {
+    res.status(400).json({ ok: false, message: "Nové heslo se musí lišit od aktuálního hesla." });
+    return;
+  }
+
+  const users = readRegisteredUsers();
+  const user = users.find((item) => sanitizeEmail(item.email) === sanitizeEmail(sessionUser.email));
+  if (!user || !verifyPassword(currentPassword, user.passwordHash)) {
+    res.status(400).json({ ok: false, message: "Aktuální heslo není správné." });
+    return;
+  }
+
+  user.passwordHash = hashPassword(newPassword);
+  try {
+    await saveRegisteredUsers(users);
+    res.json({ ok: true, message: "Heslo bylo změněno." });
+  } catch {
+    res.status(500).json({ ok: false, message: "Uložení nového hesla se nepodařilo." });
+  }
 });
 
 app.get("/api/admin/users", (req, res) => {

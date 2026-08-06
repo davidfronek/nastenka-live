@@ -920,6 +920,11 @@ button:focus-visible {
   gap: 6px;
 }
 
+.account-menu {
+  display: grid;
+  gap: 6px;
+}
+
 .backup-menu button,
 .backup-menu select {
   width: 100%;
@@ -1148,7 +1153,7 @@ button:focus-visible {
 .done-position-text {
   position: absolute;
   left: 10px;
-  top: 10px;
+  bottom: 10px;
   margin: 0;
   max-width: min(420px, calc(100vw - 80px));
   padding: 4px 8px;
@@ -1158,8 +1163,6 @@ button:focus-visible {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(75, 85, 99, 0.28);
   text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   cursor: pointer;
   pointer-events: auto;
 }

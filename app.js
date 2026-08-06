@@ -186,10 +186,17 @@ const toolDockPanel = document.querySelector("#tool-dock-panel");
 const dockToggleNote = document.querySelector("#dock-toggle-note");
 const dockToggleFilter = document.querySelector("#dock-toggle-filter");
 const dockToggleBackups = document.querySelector("#dock-toggle-backups");
+const dockToggleAccount = document.querySelector("#dock-toggle-account");
 const connectNotesBtn = document.querySelector("#connect-notes-btn");
 const dockSectionNote = document.querySelector("#dock-section-note");
 const dockSectionFilter = document.querySelector("#dock-section-filter");
 const dockSectionBackups = document.querySelector("#dock-section-backups");
+const dockSectionAccount = document.querySelector("#dock-section-account");
+const changePasswordForm = document.querySelector("#change-password-form");
+const currentPasswordInput = document.querySelector("#current-password");
+const newPasswordInput = document.querySelector("#new-password");
+const confirmPasswordInput = document.querySelector("#confirm-password");
+const changePasswordStatus = document.querySelector("#change-password-status");
 const boardInlineComposer = document.querySelector("#board-inline-composer");
 const boardInlineTitle = document.querySelector("#board-inline-title");
 const boardInlineControlTitle = document.querySelector("#board-inline-control-title");
@@ -1112,6 +1119,7 @@ function closeDockPanel() {
   dockToggleNote?.classList.remove("active");
   dockToggleFilter?.classList.remove("active");
   dockToggleBackups?.classList.remove("active");
+  dockToggleAccount?.classList.remove("active");
 }
 
 function openDockSection(section) {
@@ -1123,7 +1131,8 @@ function openDockSection(section) {
   const activeBtn =
     (dockToggleNote?.classList.contains("active") && "note") ||
     (dockToggleFilter?.classList.contains("active") && "filter") ||
-    (dockToggleBackups?.classList.contains("active") && "backups");
+    (dockToggleBackups?.classList.contains("active") && "backups") ||
+    (dockToggleAccount?.classList.contains("active") && "account");
 
   if (isAlreadyOpen && activeBtn === section) {
     closeDockPanel();
@@ -1134,10 +1143,12 @@ function openDockSection(section) {
   dockSectionNote?.classList.toggle("hidden", section !== "note");
   dockSectionFilter?.classList.toggle("hidden", section !== "filter");
   dockSectionBackups?.classList.toggle("hidden", section !== "backups");
+  dockSectionAccount?.classList.toggle("hidden", section !== "account");
 
   dockToggleNote?.classList.toggle("active", section === "note");
   dockToggleFilter?.classList.toggle("active", section === "filter");
   dockToggleBackups?.classList.toggle("active", section === "backups");
+  dockToggleAccount?.classList.toggle("active", section === "account");
   setCreationControlsVisibility(section === "note");
 }
 
@@ -1856,14 +1867,14 @@ function deleteSelectedNotes() {
   }
 
   openConfirmModal({
-    title: "Smazat vybrané lístky?",
+    title: "Smazat vybrané tickety?",
     message: `Vybrané tickety (${ids.length}) se trvale smažou z plochy.`,
     confirmLabel: "Smazat vybrané",
     confirmTone: "danger",
     onConfirm: () => {
       socket.emit("note:deleteMany", { ids }, (response) => {
         if (!response?.ok) {
-          setBoardActionStatus(response?.message || "Smazání vybraných lístků se nepodařilo.", true);
+          setBoardActionStatus(response?.message || "Smazání vybraných ticketů se nepodařilo.", true);
           return;
         }
 
@@ -1872,8 +1883,8 @@ function deleteSelectedNotes() {
         if (removedCount === 0) {
           setBoardActionStatus(
             deniedCount > 0
-              ? "Vybrané lístky nemůžeš smazat."
-              : "Vybrané lístky už nejsou aktivní.",
+              ? "Vybrané tickety nemůžeš smazat."
+              : "Vybrané tickety už nejsou aktivní.",
             deniedCount > 0
           );
           return;
@@ -1938,7 +1949,7 @@ function markSelectedNotesDone() {
 
   const ids = getSelectedOwnedNotes().map((note) => note.id);
   if (ids.length === 0) {
-    setBoardActionStatus("Nejdřív označ vlastní lístky.");
+    setBoardActionStatus("Nejdřív označ vlastní tickety.");
     return;
   }
 
@@ -1954,16 +1965,16 @@ function markSelectedNotesDone() {
 
     if (updatedCount === 0) {
       if (deniedCount > 0) {
-        setBoardActionStatus("Vybrané lístky nemůžeš označit jako vyřešené.", true);
+        setBoardActionStatus("Vybrané tickety nemůžeš označit jako vyřešené.", true);
         return;
       }
 
       if (alreadyDoneCount > 0) {
-        setBoardActionStatus("Vybrané lístky už jsou vyřešené.");
+        setBoardActionStatus("Vybrané tickety už jsou vyřešené.");
         return;
       }
 
-      setBoardActionStatus("Vybrané lístky už neexistují.");
+      setBoardActionStatus("Vybrané tickety už neexistují.");
       return;
     }
 
@@ -2172,14 +2183,14 @@ async function pasteTextToTextarea(targetTextarea, successMessage) {
     }
     targetTextarea.focus();
     updateFormatButtonsState(targetTextarea);
-    setBoardActionStatus(successMessage || "Text byl vložen do lístku.");
+    setBoardActionStatus(successMessage || "Text byl vložen do ticketu.");
   } catch {
     setBoardActionStatus("Nepodařilo se načíst text ze schránky.", true);
   }
 }
 
 async function pasteTextToNoteInput() {
-  await pasteTextToTextarea(noteText, "Text byl vložen do lístku.");
+  await pasteTextToTextarea(noteText, "Text byl vložen do ticketu.");
 }
 
 function insertTextAtCursor(targetTextarea, text) {
@@ -2610,11 +2621,11 @@ function updateDonePositionHints() {
   }
 
   if (hints.length === 0) {
-    donePositionText.textContent = "Vyřešené lístky jsou právě v aktuálním pohledu. Klikni pro přesun.";
+    donePositionText.textContent = "Vyřešené tickety jsou právě v aktuálním pohledu. Klikni pro přesun.";
     return;
   }
 
-  donePositionText.textContent = `Vyřešené lístky jsou mimo aktuální výřez: ${hints.join(", ")}. Klikni pro přesun.`;
+  donePositionText.textContent = `Vyřešené tickety jsou mimo aktuální výřez: ${hints.join(", ")}. Klikni pro přesun.`;
 }
 
 function navigateToDoneNotes() {
@@ -3402,6 +3413,10 @@ dockToggleBackups?.addEventListener("click", () => {
   loadSnapshotOptions();
 });
 
+dockToggleAccount?.addEventListener("click", () => {
+  openDockSection("account");
+});
+
 connectNotesBtn?.addEventListener("click", () => {
   setConnectionMode(!connectionMode);
 });
@@ -3466,7 +3481,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
 
   const text = getRichEditorValue(notePreviewEditText);
   if (!text) {
-    setPreviewEditStatus("Doplň text lístku.", true);
+    setPreviewEditStatus("Doplň text ticketu.", true);
     return;
   }
 
@@ -3492,7 +3507,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
     (response) => {
       clearPendingPreviewUpdateTimer();
       if (!response?.ok) {
-        setPreviewEditStatus(response?.message || "Úprava lístku se nepodařila.", true);
+        setPreviewEditStatus(response?.message || "Úprava ticketu se nepodařila.", true);
         return;
       }
 
@@ -3661,6 +3676,43 @@ saveSessionBtn?.addEventListener("click", () => {
   socket.emit("session:saveSnapshot");
 });
 
+changePasswordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (newPasswordInput.value !== confirmPasswordInput.value) {
+    changePasswordStatus.textContent = "Nová hesla se neshodují.";
+    changePasswordStatus.classList.add("is-error");
+    return;
+  }
+
+  changePasswordStatus.textContent = "Ukládám nové heslo...";
+  changePasswordStatus.classList.remove("is-error");
+  try {
+    const response = await fetch("/api/account/password", {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Session-Token": getStoredSessionToken()
+      },
+      body: JSON.stringify({
+        currentPassword: currentPasswordInput.value,
+        newPassword: newPasswordInput.value,
+        confirmation: confirmPasswordInput.value
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || "Změna hesla se nepodařila.");
+    }
+    changePasswordForm.reset();
+    changePasswordStatus.textContent = payload.message || "Heslo bylo změněno.";
+    changePasswordStatus.classList.remove("is-error");
+  } catch (error) {
+    changePasswordStatus.textContent = error.message;
+    changePasswordStatus.classList.add("is-error");
+  }
+});
+
 restoreLatestSnapshotBtn?.addEventListener("click", async () => {
   if (!me) {
     setBoardActionStatus("Nejdříve se přihlas.", true);
@@ -3688,7 +3740,7 @@ restoreLatestSnapshotBtn?.addEventListener("click", async () => {
       return;
     }
 
-    setBoardActionStatus(`Snapshot obnoven (${response.noteCount || 0} lístků, ${response.textCount || 0} textů).`);
+    setBoardActionStatus(`Snapshot obnoven (${response.noteCount || 0} ticketů, ${response.textCount || 0} textů).`);
     closeDockPanel();
   });
 });
@@ -3698,7 +3750,7 @@ pasteNoteTextBtn?.addEventListener("click", () => {
 });
 
 boardInlinePasteNoteTextBtn?.addEventListener("click", () => {
-  pasteTextToTextarea(boardInlineText, "Text byl vložen do lístku na ploše.");
+  pasteTextToTextarea(boardInlineText, "Text byl vložen do ticketu na ploše.");
 });
 
 document.addEventListener("click", (event) => {
@@ -3827,14 +3879,14 @@ deleteAllBtn?.addEventListener("click", () => {
   }
 
   openConfirmModal({
-    title: "Smazat všechny aktivní lístky?",
-    message: `Všechny aktivní lístky (${activeCount}) se trvale smažou z plochy.`,
+    title: "Smazat všechny aktivní tickety?",
+    message: `Všechny aktivní tickety (${activeCount}) se trvale smažou z plochy.`,
     confirmLabel: "Smazat vše",
     confirmTone: "danger",
     onConfirm: () => {
       socket.emit("note:deleteAll", {}, (response) => {
         if (!response?.ok) {
-          setBoardActionStatus(response?.message || "Smazání všech lístků se nepodařilo.", true);
+          setBoardActionStatus(response?.message || "Smazání všech ticketů se nepodařilo.", true);
           return;
         }
 
@@ -3843,7 +3895,7 @@ deleteAllBtn?.addEventListener("click", () => {
           return;
         }
 
-        setBoardActionStatus(`Smazáno lístků: ${response.removedCount}.`);
+        setBoardActionStatus(`Smazáno ticketů: ${response.removedCount}.`);
       });
     }
   });
@@ -4201,11 +4253,11 @@ document.addEventListener("pointerup", (event) => {
 
     emitNoteResize(resizingNote, finalWidth, finalHeight, (response) => {
       if (!response?.ok) {
-        setBoardActionStatus(response?.message || "Změna velikosti lístku se nepodařila.", true);
+        setBoardActionStatus(response?.message || "Změna velikosti ticketu se nepodařila.", true);
         return;
       }
 
-      setBoardActionStatus("Velikost lístku byla změněna.");
+      setBoardActionStatus("Velikost ticketu byla změněna.");
     });
     resizingNoteElement.classList.remove("resizing");
 
@@ -4588,7 +4640,7 @@ socket.on("notes:cleared", ({ removedCount }) => {
   activePointerId = null;
   closeNotePreview();
   renderBoard();
-  setBoardActionStatus(`Smazáno lístků: ${removedCount}.`);
+  setBoardActionStatus(`Smazáno ticketů: ${removedCount}.`);
 });
 
 window.addEventListener("pageshow", () => {
@@ -4607,7 +4659,7 @@ socket.on("session:saved", ({ createdAt, noteCount }) => {
     hour: "2-digit",
     minute: "2-digit"
   });
-  sessionSaveStatus?.replaceChildren(document.createTextNode(`Snapshot uložen ${date}. Počet lístků: ${noteCount}.`));
+  sessionSaveStatus?.replaceChildren(document.createTextNode(`Snapshot uložen ${date}. Počet ticketů: ${noteCount}.`));
   sessionSaveStatus?.classList.remove("is-error");
   loadSnapshotOptions();
 });

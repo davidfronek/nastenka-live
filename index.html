@@ -40,7 +40,7 @@
           <span class="brand-dot"></span>
           <div>
             <h1>Nástěnka Live</h1>
-            <p>Delegování úkolů na post-it lístcích v reálném čase</p>
+            <p>Delegování úkolů na ticketech v reálném čase</p>
           </div>
         </div>
 
@@ -79,6 +79,13 @@
                 </svg>
               </span>
             </button>
+            <button id="dock-toggle-account" class="dock-btn" type="button" aria-label="Můj účet" data-hint="Můj účet">
+              <span class="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"></path>
+                </svg>
+              </span>
+            </button>
             <button id="connect-notes-btn" class="dock-btn" type="button" aria-label="Nakreslit spojnici" data-hint="Spojnice">
               <span class="dock-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
@@ -109,7 +116,7 @@
                     Zadání
                     <div class="rich-editor-shell">
                       <div class="editor-tools">
-                        <div class="text-format-toolbar" data-format-toolbar="note" aria-label="Formátování textu lístku">
+                        <div class="text-format-toolbar" data-format-toolbar="note" aria-label="Formátování textu ticketu">
                           <div class="format-group" aria-label="Styl písma">
                             <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" title="Tučně"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h6.2a3.8 3.8 0 0 1 1.9 7.1A4 4 0 0 1 13.5 20H7zm3 2v4h3a2 2 0 1 0 0-4zm0 6v5h3.5a2.5 2.5 0 0 0 0-5z"/></svg></button>
                             <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" title="Kurzíva"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 4h8v2h-3.1l-3.4 12H15v2H7v-2h3.1l3.4-12H10z"/></svg></button>
@@ -216,6 +223,36 @@
               </div>
             </div>
 
+            <div id="dock-section-account" class="dock-section hidden">
+              <h2 class="section-icon" aria-label="Můj účet" title="Můj účet">
+                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"></path>
+                </svg>
+              </h2>
+              <div class="dock-section-head dock-theme-account">
+                <h3>Můj účet</h3>
+                <p>Změň si přístupové heslo.</p>
+              </div>
+              <div class="filters compact themed-panel themed-panel-actions account-menu">
+                <form id="change-password-form" class="control-card">
+                  <label>
+                    Aktuální heslo
+                    <input id="current-password" type="password" minlength="6" maxlength="120" autocomplete="current-password" required />
+                  </label>
+                  <label>
+                    Nové heslo
+                    <input id="new-password" type="password" minlength="6" maxlength="120" autocomplete="new-password" required />
+                  </label>
+                  <label>
+                    Potvrzení nového hesla
+                    <input id="confirm-password" type="password" minlength="6" maxlength="120" autocomplete="new-password" required />
+                  </label>
+                  <button type="submit">Změnit heslo</button>
+                  <p id="change-password-status" class="session-save-status" aria-live="polite"></p>
+                </form>
+              </div>
+            </div>
+
           </div>
         </section>
 
@@ -235,7 +272,7 @@
                 <p id="board-inline-control-title" class="control-title">Obsah a delegace</p>
                 <div class="rich-editor-shell">
                   <div class="editor-tools">
-                    <div class="text-format-toolbar" data-format-toolbar="board-inline-note" aria-label="Formátování textu lístku">
+                    <div class="text-format-toolbar" data-format-toolbar="board-inline-note" aria-label="Formátování textu ticketu">
                       <div class="format-group" aria-label="Styl písma">
                         <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" title="Tučně"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h6.2a3.8 3.8 0 0 1 1.9 7.1A4 4 0 0 1 13.5 20H7zm3 2v4h3a2 2 0 1 0 0-4zm0 6v5h3.5a2.5 2.5 0 0 0 0-5z"/></svg></button>
                         <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" title="Kurzíva"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 4h8v2h-3.1l-3.4 12H15v2H7v-2h3.1l3.4-12H10z"/></svg></button>
@@ -266,7 +303,7 @@
                     role="textbox"
                     aria-multiline="true"
                     data-placeholder="Například: Finální kontrola textu a předání klientovi"
-                    aria-label="Text nového lístku"
+                    aria-label="Text nového ticketu"
                   ></div>
                 </div>
                 <div id="board-inline-note-fields" class="board-inline-note-fields">
@@ -378,7 +415,7 @@
             Zadání
             <div class="rich-editor-shell note-preview-editor-shell">
               <div class="editor-tools">
-                <div class="text-format-toolbar" data-format-toolbar="preview-edit" aria-label="Formátování textu lístku">
+                <div class="text-format-toolbar" data-format-toolbar="preview-edit" aria-label="Formátování textu ticketu">
                   <div class="format-group" aria-label="Styl písma">
                     <button class="format-btn" type="button" data-format-action="bold" aria-label="Tučně" title="Tučně"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h6.2a3.8 3.8 0 0 1 1.9 7.1A4 4 0 0 1 13.5 20H7zm3 2v4h3a2 2 0 1 0 0-4zm0 6v5h3.5a2.5 2.5 0 0 0 0-5z"/></svg></button>
                     <button class="format-btn" type="button" data-format-action="italic" aria-label="Kurzíva" title="Kurzíva"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 4h8v2h-3.1l-3.4 12H15v2H7v-2h3.1l3.4-12H10z"/></svg></button>
@@ -401,7 +438,7 @@
                   </div>
                 </div>
               </div>
-              <div id="note-preview-edit-text" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Zadání lístku"></div>
+              <div id="note-preview-edit-text" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Zadání ticketu"></div>
             </div>
           </label>
 
