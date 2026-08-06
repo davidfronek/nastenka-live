@@ -2,6 +2,8 @@
 
 Klasicky fullstack projekt pro kolaborativni post-it nastenku.
 
+Uzivatelsky navod je v souboru [MANUAL.md](MANUAL.md).
+
 ## Co umi
 
 - prihlaseni vice uzivatelu najednou (kazdy uzivatel v jinem okne/tabu)
