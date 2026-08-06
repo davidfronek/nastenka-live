@@ -26,6 +26,7 @@ const io = new Server(server, {
 
 const usersBySocket = new Map();
 const sessionsByToken = new Map();
+const pendingDisconnectLogs = new Map();
 const notes = [];
 const boardTexts = [];
 const noteConnections = [];
@@ -64,6 +65,7 @@ const BOARD_TEXT_MIN_HEIGHT = 90;
 const SELF_REGISTRATION_ENABLED = false;
 const GUEST_LOGIN_ENABLED = true;
 const SESSION_TOKEN_BYTES = 24;
+const DISCONNECT_LOG_DELAY_MS = 3000;
 
 function nowTime() {
   return new Date().toLocaleTimeString("cs-CZ", {
@@ -598,6 +600,11 @@ function bindSessionToSocket(socket, sessionToken) {
     sessionToken: token
   };
 
+  const pendingDisconnectLog = pendingDisconnectLogs.get(token);
+  if (pendingDisconnectLog) {
+    clearTimeout(pendingDisconnectLog);
+    pendingDisconnectLogs.delete(token);
+  }
   usersBySocket.set(socket.id, user);
   return user;
 }
@@ -1817,7 +1824,18 @@ io.on("connection", (socket) => {
     if (user) {
       usersBySocket.delete(socket.id);
       emitUsers();
-      addActivity(`${user.name} se odpojil/a (online: ${usersBySocket.size})`);
+      const token = sanitizeSessionToken(user.sessionToken);
+      if (token) {
+        const disconnectTimer = setTimeout(() => {
+          pendingDisconnectLogs.delete(token);
+          const hasActiveSocket = Array.from(usersBySocket.values())
+            .some((activeUser) => sanitizeSessionToken(activeUser.sessionToken) === token);
+          if (!hasActiveSocket) {
+            addActivity(`${user.name} se odpojil/a (online: ${usersBySocket.size})`);
+          }
+        }, DISCONNECT_LOG_DELAY_MS);
+        pendingDisconnectLogs.set(token, disconnectTimer);
+      }
     }
   });
 });
