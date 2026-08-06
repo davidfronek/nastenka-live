@@ -1098,13 +1098,43 @@ function restoreBoardFromLatestSnapshot() {
 app.use(express.json());
 
 function emitUsers() {
-  const onlineUsers = Array.from(usersBySocket.values()).map((user) => ({
+  const uniqueUsers = new Map();
+  usersBySocket.values().forEach((user) => {
+    const key = sanitizeEmail(user.email) || sanitizeUser(user.name).toLowerCase();
+    if (!uniqueUsers.has(key)) {
+      uniqueUsers.set(key, user);
+    }
+  });
+  const onlineUsers = Array.from(uniqueUsers.values()).map((user) => ({
     id: user.id,
     name: user.name,
     color: user.color,
     role: sanitizeRole(user.role)
   }));
   io.emit("users:list", onlineUsers);
+}
+
+function getOnlineUserCount() {
+  const uniqueUsers = new Set();
+  usersBySocket.values().forEach((user) => {
+    uniqueUsers.add(sanitizeEmail(user.email) || sanitizeUser(user.name).toLowerCase());
+  });
+  return uniqueUsers.size;
+}
+
+function removeUserSockets(sessionToken) {
+  const token = sanitizeSessionToken(sessionToken);
+  if (!token) {
+    return;
+  }
+  for (const [socketId, connectedUser] of usersBySocket.entries()) {
+    if (sanitizeSessionToken(connectedUser.sessionToken) === token) {
+      usersBySocket.delete(socketId);
+      const connectedSocket = io.sockets.sockets.get(socketId);
+      connectedSocket?.emit("auth:required");
+      connectedSocket?.disconnect(true);
+    }
+  }
 }
 
 function refreshActiveUserProfile(updatedUser) {
@@ -1211,7 +1241,7 @@ io.on("connection", (socket) => {
     socket.emit("auth:ok", user);
 
     emitUsers();
-    addActivity(`${user.name} dokončil/a registraci a připojil/a se do nástěnky (online: ${usersBySocket.size})`);
+    addActivity(`${user.name} dokončil/a registraci a připojil/a se do nástěnky (online: ${getOnlineUserCount()})`);
   });
 
   socket.on("auth:login", async ({ email, password }) => {
@@ -1256,7 +1286,7 @@ io.on("connection", (socket) => {
     socket.emit("auth:ok", user);
 
     emitUsers();
-    addActivity(`${user.name} se připojil/a do nástěnky (online: ${usersBySocket.size})`);
+    addActivity(`${user.name} se připojil/a do nástěnky (online: ${getOnlineUserCount()})`);
   });
 
   socket.on("auth:guest", () => {
@@ -1283,7 +1313,7 @@ io.on("connection", (socket) => {
     socket.emit("auth:ok", user);
 
     emitUsers();
-    addActivity(`${user.name} vstoupil/a do nástěnky jako host (online: ${usersBySocket.size})`);
+    addActivity(`${user.name} vstoupil/a do nástěnky jako host (online: ${getOnlineUserCount()})`);
   });
 
   socket.on("auth:resume", ({ sessionToken }) => {
@@ -1308,9 +1338,9 @@ io.on("connection", (socket) => {
       sessionsByToken.delete(token);
     }
 
-    usersBySocket.delete(socket.id);
+    removeUserSockets(token);
     emitUsers();
-    addActivity(`${user.name} se odhlásil/a (online: ${usersBySocket.size})`);
+    addActivity(`${user.name} se odhlásil/a (online: ${getOnlineUserCount()})`);
   });
 
   socket.on("note:create", (payload) => {
@@ -1894,7 +1924,7 @@ io.on("connection", (socket) => {
           const hasActiveSocket = Array.from(usersBySocket.values())
             .some((activeUser) => sanitizeSessionToken(activeUser.sessionToken) === token);
           if (!hasActiveSocket) {
-            addActivity(`${user.name} se odpojil/a (online: ${usersBySocket.size})`);
+            addActivity(`${user.name} se odpojil/a (online: ${getOnlineUserCount()})`);
           }
         }, DISCONNECT_LOG_DELAY_MS);
         pendingDisconnectLogs.set(token, disconnectTimer);
