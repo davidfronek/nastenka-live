@@ -67,6 +67,12 @@ async function initializeFirestoreStorage() {
   };
 }
 
+async function loadUsers() {
+  const db = assertEnabled();
+  const snapshot = await db.collection("nastenka/config/users").get();
+  return snapshot.docs.map((item) => item.data());
+}
+
 async function saveUsers(users) {
   const db = assertEnabled();
   const batch = db.batch();
@@ -114,6 +120,7 @@ async function saveActivity(activity) {
 module.exports = {
   isFirestoreEnabled,
   initializeFirestoreStorage,
+  loadUsers,
   saveUsers,
   saveSnapshot,
   saveActivity

@@ -8,6 +8,7 @@ const { Server } = require("socket.io");
 const {
   isFirestoreEnabled,
   initializeFirestoreStorage,
+  loadUsers: loadUsersFromFirestore,
   saveUsers: saveUsersToFirestore,
   saveSnapshot: saveSnapshotToFirestore,
   saveActivity: saveActivityToFirestore
@@ -1063,7 +1064,7 @@ io.on("connection", (socket) => {
     addActivity(`${user.name} dokončil/a registraci a připojil/a se do nástěnky (online: ${usersBySocket.size})`);
   });
 
-  socket.on("auth:login", ({ email, password }) => {
+  socket.on("auth:login", async ({ email, password }) => {
     const cleanEmail = sanitizeEmail(email);
     const cleanPassword = sanitizePassword(password);
 
@@ -1072,7 +1073,15 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const users = readRegisteredUsers();
+    let users = readRegisteredUsers();
+    if (isFirestoreEnabled()) {
+      try {
+        users = await loadUsersFromFirestore();
+        firestoreUsers = users;
+      } catch (error) {
+        console.error(`Načtení uživatelů z Firestore při přihlášení selhalo: ${error.message}`);
+      }
+    }
     const registeredUser = users.find((item) => sanitizeEmail(item.email) === cleanEmail);
 
     if (!registeredUser || !verifyPassword(cleanPassword, registeredUser.passwordHash)) {
