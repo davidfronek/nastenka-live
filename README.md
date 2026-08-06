@@ -34,3 +34,22 @@ Pro simulaci vice uzivatelu otevri stejnou adresu ve vice oknech nebo ruznych pr
 - Ulozene zaznamy jsou v dennim souboru `data/board-snapshots-YYYY-MM-DD.json`.
 - Pri startu serveru se automaticky obnovi posledni dostupny snapshot.
 - Kazdy zaznam obsahuje: cas ulozeni, uzivatele, pocet listku a detail kazdeho listku vcetne pozice `x` a `y`.
+
+## Firebase / Firestore
+
+Ve vychozim nastaveni se pouzivaji lokalni JSON soubory. Pro externi uloziste vytvor Firebase projekt s aktivnim Cloud Firestore a servisni ucet. Nastav mimo repozitar:
+
+```powershell
+$env:STORAGE_PROVIDER = "firestore"
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\secure\firebase-service-account.json"
+```
+
+Alternativne lze pouzit `FIREBASE_SERVICE_ACCOUNT_JSON` s obsahem JSON servisniho uctu. Servisni klic nikdy nevkladej do `index.html`, `app.js` ani do verejneho repozitare.
+
+Jednorazovy import existujicich lokalnich dat:
+
+```powershell
+npm run firestore:import
+```
+
+Po importu spust server se stejnymi promennymi prostredi. Firestore rezim uklada uzivatele, snapshoty i aktivitu; pri vypnutem `STORAGE_PROVIDER` zustava puvodni lokalni chovani.

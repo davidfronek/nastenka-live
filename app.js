@@ -118,6 +118,7 @@ const loginEmail = document.querySelector("#login-email");
 const loginPassword = document.querySelector("#login-password");
 const guestLoginBtn = document.querySelector("#guest-login-btn");
 const loginError = document.querySelector("#login-error");
+const adminUsersLink = document.querySelector("#admin-users-link");
 const appShell = document.querySelector("#app-shell");
 const meBadge = document.querySelector("#me-badge");
 const logoutBtn = document.querySelector("#logout-btn");
@@ -1153,6 +1154,7 @@ function logoutLocally() {
   activeTextPointerId = null;
 
   meBadge.textContent = "";
+  adminUsersLink?.classList.add("hidden");
   logoutBtn?.classList.add("hidden");
   appShell.classList.add("hidden");
   loginScreen.classList.remove("hidden");
@@ -1307,7 +1309,7 @@ function renderPresence() {
   onlineUsers.forEach((user) => {
     const chip = document.createElement("span");
     chip.className = "user-chip";
-    chip.style.borderColor = user.color;
+    chip.style.setProperty("--user-color", user.color || "#ff5d43");
     chip.textContent = `${user.name} online`;
     presence.append(chip);
   });
@@ -4290,6 +4292,7 @@ socket.on("auth:ok", (user) => {
   loginScreen.classList.add("hidden");
   appShell.classList.remove("hidden");
   meBadge.textContent = `Přihlášen: ${me.name}`;
+  adminUsersLink?.classList.toggle("hidden", me.role !== "admin");
   logoutBtn?.classList.remove("hidden");
   setAuthorFieldValue(fromUser, me.name);
   loginPassword.value = "";

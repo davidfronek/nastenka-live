@@ -1,9 +1,17 @@
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+require("dotenv").config();
 const express = require("express");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+const {
+  isFirestoreEnabled,
+  initializeFirestoreStorage,
+  saveUsers: saveUsersToFirestore,
+  saveSnapshot: saveSnapshotToFirestore,
+  saveActivity: saveActivityToFirestore
+} = require("./firestore-storage");
 
 const app = express();
 const server = createServer(app);
@@ -27,6 +35,9 @@ const dataDir = path.join(__dirname, "data");
 const activityDir = path.join(dataDir, "activity");
 const legacySnapshotFilePath = path.join(dataDir, "board-snapshots.json");
 const usersFilePath = path.join(dataDir, "users.json");
+let firestoreUsers = null;
+let firestoreSnapshots = [];
+let firestoreActivity = [];
 const ACTIVITY_LIMIT = 30;
 const DONE_STACK_X = 2400;
 const DONE_STACK_Y = 430;
@@ -246,6 +257,22 @@ function formatPriorityLabel(value) {
 
 function isAdmin(user) {
   return sanitizeRole(user?.role) === "admin";
+}
+
+function getRequestUser(req) {
+  const authorization = String(req.headers.authorization || "");
+  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const token = sanitizeSessionToken(req.headers["x-session-token"] || bearerToken);
+  return getSessionUser(token) ? { ...getSessionUser(token), sessionToken: token } : null;
+}
+
+function requireAdmin(req, res) {
+  const user = getRequestUser(req);
+  if (!user || !isAdmin(user)) {
+    res.status(403).json({ ok: false, message: "Přístup je povolen pouze administrátorům." });
+    return null;
+  }
+  return user;
 }
 
 function canManageNote(_user, _note) {
@@ -583,6 +610,12 @@ function listActivityFilePaths() {
 }
 
 function listSnapshotFilePaths() {
+  if (isFirestoreEnabled()) {
+    return Array.from(new Set(firestoreSnapshots.map((snapshot) => (
+      `board-snapshots-${String(snapshot.createdAt || "").slice(0, 10)}.json`
+    )))).map((fileName) => path.join(dataDir, fileName));
+  }
+
   if (!fs.existsSync(dataDir)) {
     return [];
   }
@@ -614,6 +647,13 @@ function ensureSnapshotStorage() {
 }
 
 function readSnapshots(filePath = getSnapshotFilePath()) {
+  if (isFirestoreEnabled()) {
+    const fileName = path.basename(filePath);
+    return firestoreSnapshots.filter((snapshot) => (
+      `board-snapshots-${String(snapshot.createdAt || "").slice(0, 10)}.json` === fileName
+    ));
+  }
+
   ensureSnapshotStorage();
   ensureSnapshotFile(filePath);
   try {
@@ -626,6 +666,10 @@ function readSnapshots(filePath = getSnapshotFilePath()) {
 }
 
 function readLatestSnapshot() {
+  if (isFirestoreEnabled()) {
+    return firestoreSnapshots[0] || null;
+  }
+
   const files = listSnapshotFilePaths();
   for (const filePath of files) {
     const snapshots = readSnapshots(filePath);
@@ -755,6 +799,10 @@ function restoreBoardFromSnapshot(snapshot) {
 }
 
 function readActivityEntries(filePath = getActivityFilePath()) {
+  if (isFirestoreEnabled()) {
+    return firestoreActivity;
+  }
+
   ensureSnapshotStorage();
   ensureActivityStorage();
   try {
@@ -767,6 +815,10 @@ function readActivityEntries(filePath = getActivityFilePath()) {
 }
 
 function readLatestActivityEntries() {
+  if (isFirestoreEnabled()) {
+    return firestoreActivity.slice(0, ACTIVITY_LIMIT);
+  }
+
   const files = listActivityFilePaths();
   for (const filePath of files) {
     const entries = readActivityEntries(filePath);
@@ -778,11 +830,23 @@ function readLatestActivityEntries() {
 }
 
 function saveActivityLog() {
+  if (isFirestoreEnabled()) {
+    firestoreActivity = activity.slice(0, ACTIVITY_LIMIT);
+    saveActivityToFirestore(firestoreActivity).catch((error) => {
+      console.error(`Uložení aktivity do Firestore selhalo: ${error.message}`);
+    });
+    return;
+  }
+
   const activityFilePath = ensureActivityStorage();
   fs.writeFileSync(activityFilePath, `${JSON.stringify(activity, null, 2)}\n`, "utf-8");
 }
 
 function readRegisteredUsers() {
+  if (isFirestoreEnabled()) {
+    return firestoreUsers || [];
+  }
+
   ensureSnapshotStorage();
   try {
     const raw = fs.readFileSync(usersFilePath, "utf-8");
@@ -794,8 +858,17 @@ function readRegisteredUsers() {
 }
 
 function saveRegisteredUsers(users) {
+  if (isFirestoreEnabled()) {
+    firestoreUsers = users;
+    return saveUsersToFirestore(users).catch((error) => {
+      console.error(`Uložení uživatelů do Firestore selhalo: ${error.message}`);
+      throw error;
+    });
+  }
+
   ensureSnapshotStorage();
   fs.writeFileSync(usersFilePath, `${JSON.stringify(users, null, 2)}\n`, "utf-8");
+  return Promise.resolve();
 }
 
 function saveBoardSnapshot(savedBy) {
@@ -848,6 +921,14 @@ function saveBoardSnapshot(savedBy) {
   };
 
   const dailySnapshotFilePath = getSnapshotFilePath();
+  if (isFirestoreEnabled()) {
+    firestoreSnapshots.unshift(snapshot);
+    saveSnapshotToFirestore(snapshot).catch((error) => {
+      console.error(`Uložení snapshotu do Firestore selhalo: ${error.message}`);
+    });
+    return snapshot;
+  }
+
   const allSnapshots = readSnapshots(dailySnapshotFilePath);
   allSnapshots.unshift(snapshot);
 
@@ -873,6 +954,32 @@ function emitUsers() {
     role: sanitizeRole(user.role)
   }));
   io.emit("users:list", onlineUsers);
+}
+
+function refreshActiveUserProfile(updatedUser) {
+  const updatedEmail = sanitizeEmail(updatedUser?.email);
+  sessionsByToken.forEach((sessionUser, token) => {
+    if (sanitizeEmail(sessionUser.email) !== updatedEmail) {
+      return;
+    }
+
+    sessionUser.name = sanitizeUser(updatedUser.username);
+    sessionUser.email = updatedEmail;
+    sessionUser.role = sanitizeRole(updatedUser.role);
+    sessionUser.color = String(updatedUser.defaultColor || "#ff5d43");
+
+    for (const [socketId, connectedUser] of usersBySocket.entries()) {
+      if (connectedUser.sessionToken === token) {
+        usersBySocket.set(socketId, {
+          ...connectedUser,
+          name: sessionUser.name,
+          email: sessionUser.email,
+          role: sessionUser.role,
+          color: sessionUser.color
+        });
+      }
+    }
+  });
 }
 
 io.on("connection", (socket) => {
@@ -1613,6 +1720,153 @@ app.get("/api/users", (_req, res) => {
   res.json({ users });
 });
 
+app.get("/api/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const users = readRegisteredUsers().map((item) => ({
+    id: String(item.id || ""),
+    username: sanitizeUser(item.username),
+    email: sanitizeEmail(item.email),
+    role: sanitizeRole(item.role),
+    defaultColor: String(item.defaultColor || "#ff5d43"),
+    createdAt: item.createdAt || null
+  }));
+  res.json({ ok: true, users });
+});
+
+app.post("/api/admin/users", async (req, res) => {
+  const adminUser = requireAdmin(req, res);
+  if (!adminUser) {
+    return;
+  }
+
+  const username = sanitizeUser(req.body?.username);
+  const email = sanitizeEmail(req.body?.email);
+  const password = sanitizePassword(req.body?.password);
+  const role = sanitizeRole(req.body?.role);
+  const defaultColor = sanitizeColor(req.body?.defaultColor) || "#ff5d43";
+  const users = readRegisteredUsers();
+
+  if (!username || !email || !isEmailValid(email) || password.length < 6) {
+    res.status(400).json({ ok: false, message: "Vyplň platné jméno, e-mail a heslo dlouhé alespoň 6 znaků." });
+    return;
+  }
+  if (users.some((item) => sanitizeEmail(item.email) === email)) {
+    res.status(409).json({ ok: false, message: "Tento e-mail už je registrovaný." });
+    return;
+  }
+  if (users.some((item) => sanitizeUser(item.username).toLowerCase() === username.toLowerCase())) {
+    res.status(409).json({ ok: false, message: "Toto uživatelské jméno už existuje." });
+    return;
+  }
+
+  users.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    username,
+    email,
+    role,
+    passwordHash: hashPassword(password),
+    defaultColor,
+    createdAt: new Date().toISOString()
+  });
+
+  try {
+    await saveRegisteredUsers(users);
+    res.status(201).json({ ok: true });
+  } catch {
+    res.status(500).json({ ok: false, message: "Uložení uživatele se nepodařilo." });
+  }
+});
+
+app.patch("/api/admin/users/:id", async (req, res) => {
+  const adminUser = requireAdmin(req, res);
+  if (!adminUser) {
+    return;
+  }
+
+  const users = readRegisteredUsers();
+  const user = users.find((item) => String(item.id) === String(req.params.id));
+  if (!user) {
+    res.status(404).json({ ok: false, message: "Uživatel nebyl nalezen." });
+    return;
+  }
+
+  const username = sanitizeUser(req.body?.username);
+  const email = sanitizeEmail(req.body?.email);
+  const password = sanitizePassword(req.body?.password);
+  const role = sanitizeRole(req.body?.role);
+  const defaultColor = sanitizeColor(req.body?.defaultColor) || "#ff5d43";
+
+  if (!username || !email || !isEmailValid(email)) {
+    res.status(400).json({ ok: false, message: "Vyplň platné jméno a e-mail." });
+    return;
+  }
+  if (password && password.length < 6) {
+    res.status(400).json({ ok: false, message: "Nové heslo musí mít alespoň 6 znaků." });
+    return;
+  }
+  if (users.some((item) => String(item.id) !== String(user.id) && sanitizeEmail(item.email) === email)) {
+    res.status(409).json({ ok: false, message: "Tento e-mail už používá jiný uživatel." });
+    return;
+  }
+  if (users.some((item) => String(item.id) !== String(user.id) && sanitizeUser(item.username).toLowerCase() === username.toLowerCase())) {
+    res.status(409).json({ ok: false, message: "Toto uživatelské jméno už používá jiný uživatel." });
+    return;
+  }
+
+  user.username = username;
+  user.email = email;
+  user.role = role;
+  user.defaultColor = defaultColor;
+  if (password) {
+    user.passwordHash = hashPassword(password);
+  }
+
+  try {
+    await saveRegisteredUsers(users);
+    refreshActiveUserProfile(user);
+    emitUsers();
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ ok: false, message: "Uložení změn se nepodařilo." });
+  }
+});
+
+app.delete("/api/admin/users/:id", async (req, res) => {
+  const adminUser = requireAdmin(req, res);
+  if (!adminUser) {
+    return;
+  }
+
+  const users = readRegisteredUsers();
+  const userIndex = users.findIndex((item) => String(item.id) === String(req.params.id));
+  if (userIndex === -1) {
+    res.status(404).json({ ok: false, message: "Uživatel nebyl nalezen." });
+    return;
+  }
+
+  const target = users[userIndex];
+  const adminCount = users.filter((item) => isAdmin(item)).length;
+  if (isAdmin(target) && adminCount <= 1) {
+    res.status(400).json({ ok: false, message: "Nelze odstranit posledního administrátora." });
+    return;
+  }
+  if (sanitizeEmail(target.email) === sanitizeEmail(adminUser.email)) {
+    res.status(400).json({ ok: false, message: "Svůj vlastní účet zde nelze odstranit." });
+    return;
+  }
+
+  users.splice(userIndex, 1);
+  try {
+    await saveRegisteredUsers(users);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ ok: false, message: "Odstranění uživatele se nepodařilo." });
+  }
+});
+
 app.post("/api/users/template-entry", (req, res) => {
   const username = sanitizeUser(req.body?.username);
   const email = sanitizeEmail(req.body?.email);
@@ -1656,30 +1910,41 @@ app.get("/api/snapshots", (_req, res) => {
   res.json({ snapshots: listSnapshotSummaries() });
 });
 
-// 1. Načtení historie a snapshotů při startu serveru
-const restoredActivity = readLatestActivityEntries();
-if (restoredActivity.length > 0) {
-  activity.push(...restoredActivity);
-  console.log(`Obnoven živý feed (${restoredActivity.length} položek).`);
+async function startServer() {
+  ensureSnapshotStorage();
+
+  if (isFirestoreEnabled()) {
+    const remoteStorage = await initializeFirestoreStorage();
+    firestoreUsers = remoteStorage.users;
+    firestoreSnapshots = remoteStorage.snapshots.sort((a, b) => (
+      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    ));
+    firestoreActivity = remoteStorage.activity.sort((a, b) => (
+      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    ));
+    console.log(`Používá se Firestore (${firestoreSnapshots.length} snapshotů, ${firestoreUsers.length} uživatelů).`);
+  }
+
+  const restoredActivity = readLatestActivityEntries();
+  if (restoredActivity.length > 0) {
+    activity.push(...restoredActivity);
+    console.log(`Obnoven živý feed (${restoredActivity.length} položek).`);
+  }
+
+  const restoredSnapshot = restoreBoardFromLatestSnapshot();
+  if (restoredSnapshot) {
+    console.log(
+      `Obnoven snapshot ${restoredSnapshot.id} (${restoredSnapshot.noteCount} listku, ${restoredSnapshot.textCount} textu) z ${restoredSnapshot.createdAt}.`
+    );
+  }
+
+  const PORT = process.env.PORT || 3099;
+  server.listen(PORT, () => {
+    console.log(`Nástěnka Live běží na portu ${PORT}`);
+  });
 }
 
-const restoredSnapshot = restoreBoardFromLatestSnapshot();
-if (restoredSnapshot) {
-  console.log(
-    `Obnoven snapshot ${restoredSnapshot.id} (${restoredSnapshot.noteCount} listku, ${restoredSnapshot.textCount} textu) z ${restoredSnapshot.createdAt}.`
-  );
-}
-
-// 1. Správné servírování statických souborů z kořene projektu
-app.use(express.static(path.resolve(__dirname)));
-
-// 2. OPRAVENO: Použití path.resolve pro přesné zacílení na index.html
-app.get("*", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "index.html"));
-});
-
-// 3. OPRAVENO: Správné spuštění serveru pro Render (vytáhnuto ven z podmínky)
-const PORT = process.env.PORT || 3099;
-server.listen(PORT, () => {
-  console.log(`Nástěnka Live běží na portu ${PORT}`);
+startServer().catch((error) => {
+  console.error(`Spuštění serveru selhalo: ${error.message}`);
+  process.exitCode = 1;
 });

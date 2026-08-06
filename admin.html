@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Správa uživatelů | Nástěnka Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section id="admin-login" class="admin-login">
+        <div class="eyebrow">NÁSTĚNKA LIVE / ADMIN</div>
+        <h1>Správa uživatelů</h1>
+        <p>Přihlas se administrátorským účtem a sprav účty uložené v databázi.</p>
+        <form id="admin-login-form">
+          <label>E-mail<input id="admin-login-email" type="email" autocomplete="username" required /></label>
+          <label>Heslo<input id="admin-login-password" type="password" autocomplete="current-password" required /></label>
+          <button type="submit">Přihlásit se</button>
+        </form>
+        <p id="admin-login-status" class="status" role="alert"></p>
+        <a href="./index.html">Zpět na nástěnku</a>
+      </section>
+
+      <section id="admin-app" class="admin-app hidden">
+        <header class="admin-header">
+          <div>
+            <div class="eyebrow">NÁSTĚNKA LIVE / ADMIN</div>
+            <h1>Uživatelé</h1>
+            <p id="admin-identity"></p>
+          </div>
+          <div class="header-actions">
+            <a class="ghost-button" href="./index.html">Nástěnka</a>
+            <button id="admin-logout" class="ghost-button" type="button">Odhlásit</button>
+          </div>
+        </header>
+
+        <section class="admin-grid">
+          <form id="user-form" class="user-form">
+            <div class="form-heading">
+              <div>
+                <div class="eyebrow">ÚČET</div>
+                <h2 id="form-title">Nový uživatel</h2>
+              </div>
+              <button id="cancel-edit" class="icon-button hidden" type="button" aria-label="Zrušit úpravu">×</button>
+            </div>
+            <input id="user-id" type="hidden" />
+            <label>Uživatelské jméno<input id="user-username" maxlength="30" required /></label>
+            <label>E-mail<input id="user-email" type="email" maxlength="120" required /></label>
+            <label>Heslo <span id="password-hint">(povinné)</span><input id="user-password" type="password" minlength="6" maxlength="120" /></label>
+            <div class="form-row">
+              <label>Role<select id="user-role"><option value="user">Uživatel</option><option value="admin">Administrátor</option></select></label>
+              <label>Barva<input id="user-color" type="color" value="#ff5d43" /></label>
+            </div>
+            <button id="save-user" type="submit">Vytvořit účet</button>
+            <p id="user-status" class="status" role="alert"></p>
+          </form>
+
+          <section class="user-list-panel">
+            <div class="list-heading">
+              <div><div class="eyebrow">DATABÁZE</div><h2>Registrované účty</h2></div>
+              <button id="refresh-users" class="icon-button" type="button" aria-label="Obnovit seznam">↻</button>
+            </div>
+            <div id="user-list" class="user-list"></div>
+            <p id="list-status" class="status" role="alert"></p>
+          </section>
+        </section>
+      </section>
+    </main>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="./admin.js"></script>
+  </body>
+</html>
