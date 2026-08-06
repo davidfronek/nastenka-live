@@ -89,6 +89,8 @@ let noteConnectionsSvg = null;
 let noteConnections = [];
 let connectionMode = false;
 let connectionStartNoteId = null;
+let connectionEditingKey = null;
+let selectedConnectionKey = null;
 let lastRichEditorSelection = null;
 let pendingInlineFormatSelection = null;
 let pendingConfirmAction = null;
@@ -110,6 +112,7 @@ const BOARD_TEXT_WIDTH = 340;
 const BOARD_TEXT_HEIGHT = 110;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NOTE_CONNECTION_VERTICAL_CENTER_RATIO = 0.42;
+const NOTE_CONNECTION_GAP_PX = 8;
 
 const loginScreen = document.querySelector("#login-screen");
 const loginForm = document.querySelector("#login-form");
@@ -192,6 +195,8 @@ const dockSectionNote = document.querySelector("#dock-section-note");
 const dockSectionFilter = document.querySelector("#dock-section-filter");
 const dockSectionBackups = document.querySelector("#dock-section-backups");
 const dockSectionAccount = document.querySelector("#dock-section-account");
+const editConnectionBtn = document.querySelector("#edit-connection-btn");
+const deleteConnectionBtn = document.querySelector("#delete-connection-btn");
 const changePasswordForm = document.querySelector("#change-password-form");
 const currentPasswordInput = document.querySelector("#current-password");
 const newPasswordInput = document.querySelector("#new-password");
@@ -1172,6 +1177,7 @@ function logoutLocally() {
   adminUsersLink?.classList.add("hidden");
   logoutBtn?.classList.add("hidden");
   appShell.classList.add("hidden");
+  appShell.classList.remove("guest-mode");
   loginScreen.classList.remove("hidden");
   loginError.textContent = "";
   loginPassword.value = "";
@@ -1614,11 +1620,45 @@ function getNoteConnectionAnchor(note, towardX, towardY) {
   const horizontalScale = Math.abs(deltaX) > 0.001 ? horizontalDistance / Math.abs(deltaX) : Number.POSITIVE_INFINITY;
   const verticalScale = Math.abs(deltaY) > 0.001 ? verticalDistance / Math.abs(deltaY) : Number.POSITIVE_INFINITY;
   const scale = Math.min(horizontalScale, verticalScale);
+  const distance = Math.hypot(deltaX, deltaY);
+  const gapX = distance > 0 ? (deltaX / distance) * NOTE_CONNECTION_GAP_PX : 0;
+  const gapY = distance > 0 ? (deltaY / distance) * NOTE_CONNECTION_GAP_PX : 0;
 
   return {
-    x: center.x + deltaX * scale,
-    y: center.y + deltaY * scale
+    x: center.x + deltaX * scale + gapX,
+    y: center.y + deltaY * scale + gapY
   };
+}
+
+function getConnectionKey(connection) {
+  return [String(connection?.fromId || ""), String(connection?.toId || "")].sort().join("::");
+}
+
+function getSelectedConnection() {
+  return noteConnections.find((connection) => getConnectionKey(connection) === selectedConnectionKey) || null;
+}
+
+function updateConnectionActions() {
+  const hasSelection = Boolean(getSelectedConnection());
+  editConnectionBtn?.classList.toggle("hidden", !hasSelection);
+  deleteConnectionBtn?.classList.toggle("hidden", !hasSelection);
+}
+
+function selectConnection(connection) {
+  selectedConnectionKey = getConnectionKey(connection);
+  updateConnectionActions();
+  renderNoteConnections();
+  setBoardActionStatus("Spojnice vybrána. Můžeš ji upravit nebo smazat.");
+}
+
+function decorateConnectionGroup(connectionGroup, connection) {
+  connectionGroup.dataset.connectionKey = getConnectionKey(connection);
+  connectionGroup.classList.toggle("selected", getConnectionKey(connection) === selectedConnectionKey);
+  connectionGroup.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    selectConnection(connection);
+  });
 }
 
 function renderNoteConnections() {
@@ -1633,6 +1673,7 @@ function renderNoteConnections() {
 
   const visibleNotes = getVisibleNotes();
   if (visibleNotes.length === 0) {
+    updateConnectionActions();
     return;
   }
 
@@ -1656,6 +1697,7 @@ function renderNoteConnections() {
 
     const connectionGroup = document.createElementNS(SVG_NS, "g");
     connectionGroup.classList.add("board-connection");
+    decorateConnectionGroup(connectionGroup, { fromId: sourceNote.id, toId: note.id });
 
     const connectionLine = document.createElementNS(SVG_NS, "line");
     connectionLine.classList.add("board-connection-line");
@@ -1682,6 +1724,7 @@ function renderNoteConnections() {
     const end = getNoteConnectionAnchor(targetNote, sourceCenter.x, sourceCenter.y);
     const connectionGroup = document.createElementNS(SVG_NS, "g");
     connectionGroup.classList.add("board-connection", "board-connection-custom");
+    decorateConnectionGroup(connectionGroup, connection);
     const connectionLine = document.createElementNS(SVG_NS, "line");
     connectionLine.classList.add("board-connection-line");
     connectionLine.setAttribute("x1", String(start.x));
@@ -1692,14 +1735,24 @@ function renderNoteConnections() {
     connectionGroup.append(connectionLine);
     overlay.append(connectionGroup);
   });
+
+  updateConnectionActions();
 }
 
-function setConnectionMode(enabled) {
+function setConnectionMode(enabled, startNoteId = null, editingKey = null) {
   connectionMode = enabled;
-  connectionStartNoteId = null;
+  connectionStartNoteId = startNoteId;
+  connectionEditingKey = editingKey;
   connectNotesBtn?.classList.toggle("active", enabled);
   board?.classList.toggle("connection-mode", enabled);
-  setBoardActionStatus(enabled ? "Spojnice: klikni na první a potom na druhý ticket." : "");
+  boardCanvas?.querySelectorAll(".sticky").forEach((element) => {
+    element.classList.toggle("connection-start", enabled && element.dataset.id === startNoteId);
+  });
+  setBoardActionStatus(enabled
+    ? startNoteId
+      ? "Začátek spojnice je vybraný. Klikni na nový koncový ticket."
+      : "Spojnice: klikni na první a potom na druhý ticket."
+    : "");
 }
 
 function handleConnectionNoteClick(note) {
@@ -1713,10 +1766,20 @@ function handleConnectionNoteClick(note) {
   }
   const fromId = connectionStartNoteId;
   connectionStartNoteId = null;
-  socket.emit("connection:create", { fromId, toId: note.id }, (response) => {
+  const eventName = connectionEditingKey ? "connection:update" : "connection:create";
+  const payload = connectionEditingKey
+    ? { fromId, toId: connectionEditingKey.split("::").find((id) => id !== fromId), nextToId: note.id }
+    : { fromId, toId: note.id };
+  connectionEditingKey = null;
+  socket.emit(eventName, payload, (response) => {
     if (!response?.ok) {
       setBoardActionStatus(response?.message || "Spojnici se nepodařilo vytvořit.", true);
       return;
+    }
+    selectedConnectionKey = response.connection ? getConnectionKey(response.connection) : null;
+    updateConnectionActions();
+    if (eventName === "connection:update") {
+      setConnectionMode(false);
     }
     setBoardActionStatus(response.existing ? "Tato spojnice už existuje." : "Spojnice vytvořena.");
   });
@@ -1798,15 +1861,15 @@ function isAssignedToMe(_note) {
 }
 
 function canEditNote(note) {
-  return isMyNote(note);
+  return Boolean(me?.role !== "guest" && isMyNote(note));
 }
 
 function canToggleNote(_note) {
-  return true;
+  return me?.role !== "guest";
 }
 
 function canMoveNote(_note) {
-  return Boolean(me);
+  return Boolean(me && me.role !== "guest");
 }
 
 function getSelectedMovableNotes() {
@@ -1999,7 +2062,7 @@ function isMyBoardText(_item) {
 }
 
 function canEditBoardText(_item) {
-  return true;
+  return me?.role !== "guest";
 }
 
 function setActiveBoardText(id) {
@@ -3015,6 +3078,7 @@ function createStickyElement(note) {
   doneToggle.textContent = getNoteStatus(note) === "done" ? "Obnovit" : "Vyřešeno";
   sticky.classList.toggle("done", getNoteStatus(note) === "done");
   sticky.classList.toggle("selected", selectedNoteIds.has(note.id));
+  sticky.classList.toggle("connection-start", connectionMode && connectionStartNoteId === note.id);
 
   const canDelete = getNoteStatus(note) === "done" || canEditNote(note);
   if (!canDelete) {
@@ -3095,6 +3159,9 @@ function createStickyElement(note) {
     }
 
     if (event.target.closest(".done-toggle") || event.target.closest(".delete-toggle") || event.target.closest(".note-resize") || event.target.closest(".board-text-resize") || event.button !== 0) {
+      return;
+    }
+    if (connectionMode) {
       return;
     }
 
@@ -3419,6 +3486,41 @@ dockToggleAccount?.addEventListener("click", () => {
 
 connectNotesBtn?.addEventListener("click", () => {
   setConnectionMode(!connectionMode);
+});
+
+editConnectionBtn?.addEventListener("click", () => {
+  const connection = getSelectedConnection();
+  if (!connection) {
+    return;
+  }
+  setConnectionMode(true, connection.fromId, getConnectionKey(connection));
+});
+
+deleteConnectionBtn?.addEventListener("click", () => {
+  const connection = getSelectedConnection();
+  if (!connection) {
+    return;
+  }
+
+  openConfirmModal({
+    title: "Smazat spojnici?",
+    message: "Tato spojnice se trvale odstraní mezi vybranými tickety.",
+    confirmLabel: "Smazat spojnici",
+    confirmTone: "danger",
+    onConfirm: () => {
+      socket.emit("connection:delete", connection, (response) => {
+        if (!response?.ok) {
+          setBoardActionStatus(response?.message || "Spojnici se nepodařilo smazat.", true);
+          return;
+        }
+        noteConnections = noteConnections.filter((item) => getConnectionKey(item) !== getConnectionKey(connection));
+        selectedConnectionKey = null;
+        updateConnectionActions();
+        renderNoteConnections();
+        setBoardActionStatus("Spojnice byla smazána.");
+      });
+    }
+  });
 });
 
 noteScaleMinus?.addEventListener("click", () => {
@@ -4330,6 +4432,7 @@ socket.on("auth:ok", (user) => {
   storeSessionToken(user?.sessionToken);
   loginScreen.classList.add("hidden");
   appShell.classList.remove("hidden");
+  appShell.classList.toggle("guest-mode", me.role === "guest");
   meBadge.textContent = `Přihlášen: ${me.name}`;
   adminUsersLink?.classList.toggle("hidden", me.role !== "admin");
   logoutBtn?.classList.remove("hidden");
@@ -4351,6 +4454,12 @@ socket.on("connect", () => {
   }
 
   socket.emit("auth:resume", { sessionToken });
+});
+
+socket.on("error", (error) => {
+  if (me?.role === "guest") {
+    setBoardActionStatus(error?.message || "Host má přístup pouze pro náhled.", true);
+  }
 });
 
 socket.on("board:init", ({ notes: initialNotes, texts: initialTexts, connections: initialConnections, activity }) => {
@@ -4387,6 +4496,10 @@ socket.on("connection:created", (connection) => {
 socket.on("connection:deleted", (connection) => {
   noteConnections = noteConnections.filter((item) => !(item.fromId === connection.fromId && item.toId === connection.toId)
     && !(item.fromId === connection.toId && item.toId === connection.fromId));
+  if (selectedConnectionKey === getConnectionKey(connection)) {
+    selectedConnectionKey = null;
+  }
+  updateConnectionActions();
   renderNoteConnections();
 });
 

@@ -8,7 +8,7 @@ Nástěnka Live je společná online plocha pro zadávání, delegování a sled
 2. Přihlaste se e-mailem a heslem.
 3. Pokud potřebujete pouze prohlížet plochu, můžete zvolit **Pokračovat jako host**.
 
-Host může pracovat s nástěnkou podle aktuálních oprávnění, ale nemá vlastní registrovaný účet ani heslo. Změnu hesla mohou provést pouze registrovaní uživatelé.
+Host má přístup pouze pro náhled. Může si prohlížet tickety, feed a online uživatele a používat filtraci, ale nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, měnit texty, spravovat spojnice, ukládat nebo obnovovat snapshoty ani měnit heslo. Host nemá vlastní registrovaný účet ani heslo.
 
 Po přihlášení se v horní části zobrazí vaše jméno, počet online uživatelů a případně odkaz **Správa uživatelů**, pokud máte administrátorskou roli.
 

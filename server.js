@@ -170,7 +170,12 @@ function sanitizePassword(value) {
 }
 
 function sanitizeRole(value) {
-  return String(value || "").trim().toLowerCase() === "admin" ? "admin" : "user";
+  const role = String(value || "").trim().toLowerCase();
+  return role === "admin" ? "admin" : role === "guest" ? "guest" : "user";
+}
+
+function isGuest(user) {
+  return sanitizeRole(user?.role) === "guest";
 }
 
 function sanitizeSessionToken(value) {
@@ -289,6 +294,15 @@ function getRequestUser(req) {
   const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
   const token = sanitizeSessionToken(req.headers["x-session-token"] || bearerToken);
   return getSessionUser(token) ? { ...getSessionUser(token), sessionToken: token } : null;
+}
+
+function requireWritableRequestUser(req, res) {
+  const user = getRequestUser(req);
+  if (!user || isGuest(user)) {
+    res.status(user ? 403 : 401).json({ ok: false, message: "Host má přístup pouze pro náhled." });
+    return null;
+  }
+  return user;
 }
 
 function requireAdmin(req, res) {
@@ -1203,6 +1217,37 @@ function refreshActiveUserProfile(updatedUser) {
 }
 
 io.on("connection", (socket) => {
+  const readOnlyGuestEvents = new Set([
+    "note:create",
+    "note:move",
+    "note:resize",
+    "note:update",
+    "note:toggle",
+    "note:delete",
+    "note:deleteMany",
+    "note:markManyDone",
+    "note:deleteAll",
+    "text:create",
+    "text:move",
+    "text:update",
+    "text:resize",
+    "text:delete",
+    "connection:create",
+    "connection:update",
+    "connection:delete",
+    "session:saveSnapshot",
+    "snapshot:restore"
+  ]);
+
+  socket.use(([eventName], next) => {
+    const user = usersBySocket.get(socket.id);
+    if (isGuest(user) && readOnlyGuestEvents.has(eventName)) {
+      next(new Error("Host má přístup pouze pro náhled."));
+      return;
+    }
+    next();
+  });
+
   socket.emit("board:init", {
     notes,
     texts: boardTexts,
@@ -1338,7 +1383,7 @@ io.on("connection", (socket) => {
     const baseUser = {
       name: `Host ${guestCode}`,
       email: `guest-${Date.now()}-${guestCode.toLowerCase()}@guest.local`,
-      role: "user",
+      role: "guest",
       color: "#ffb703"
     };
 
@@ -1489,6 +1534,73 @@ io.on("connection", (socket) => {
     io.emit("connection:created", connection);
     addActivity(`${user.name} propojil/a dva tickety`);
     ack?.({ ok: true, connection });
+  });
+
+  socket.on("connection:update", ({ fromId, toId, nextToId }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    const cleanFromId = String(fromId || "");
+    const cleanToId = String(toId || "");
+    const cleanNextToId = String(nextToId || "");
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+    if (!cleanFromId || !cleanToId || !cleanNextToId || cleanFromId === cleanNextToId) {
+      ack?.({ ok: false, message: "Vyber dva různé tickety." });
+      return;
+    }
+    if (!notes.some((note) => note.id === cleanFromId) || !notes.some((note) => note.id === cleanNextToId)) {
+      ack?.({ ok: false, message: "Jeden z vybraných ticketů už neexistuje." });
+      return;
+    }
+
+    const connectionIndex = noteConnections.findIndex((connection) => (
+      (connection.fromId === cleanFromId && connection.toId === cleanToId)
+      || (connection.fromId === cleanToId && connection.toId === cleanFromId)
+    ));
+    if (connectionIndex < 0) {
+      ack?.({ ok: false, message: "Spojnice už neexistuje." });
+      return;
+    }
+    if (noteConnections.some((connection, index) => index !== connectionIndex && (
+      (connection.fromId === cleanFromId && connection.toId === cleanNextToId)
+      || (connection.fromId === cleanNextToId && connection.toId === cleanFromId)
+    ))) {
+      ack?.({ ok: false, message: "Tato spojnice už existuje." });
+      return;
+    }
+
+    const previousConnection = noteConnections[connectionIndex];
+    const connection = { fromId: cleanFromId, toId: cleanNextToId };
+    noteConnections[connectionIndex] = connection;
+    io.emit("connection:deleted", previousConnection);
+    io.emit("connection:created", connection);
+    addActivity(`${user.name} upravil/a spojnici mezi tickety`);
+    ack?.({ ok: true, connection });
+  });
+
+  socket.on("connection:delete", ({ fromId, toId }, ack) => {
+    const user = usersBySocket.get(socket.id);
+    const cleanFromId = String(fromId || "");
+    const cleanToId = String(toId || "");
+    if (!user) {
+      ack?.({ ok: false, message: "Nejdříve se přihlas." });
+      return;
+    }
+
+    const connectionIndex = noteConnections.findIndex((connection) => (
+      (connection.fromId === cleanFromId && connection.toId === cleanToId)
+      || (connection.fromId === cleanToId && connection.toId === cleanFromId)
+    ));
+    if (connectionIndex < 0) {
+      ack?.({ ok: false, message: "Spojnice už neexistuje." });
+      return;
+    }
+
+    const [connection] = noteConnections.splice(connectionIndex, 1);
+    io.emit("connection:deleted", connection);
+    addActivity(`${user.name} smazal/a spojnici mezi tickety`);
+    ack?.({ ok: true });
   });
 
   socket.on("note:move", ({ id, x, y }) => {
@@ -1940,6 +2052,10 @@ app.get("/health", (_req, res) => {
 });
 
 app.post("/api/snapshots/save", (req, res) => {
+  const sessionUser = requireWritableRequestUser(req, res);
+  if (!sessionUser) {
+    return;
+  }
   const savedBy = sanitizeUser(req.body?.savedBy) || "Neznámý uživatel";
   const snapshot = saveBoardSnapshot(savedBy);
   addActivity(`${savedBy} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
@@ -1963,9 +2079,8 @@ app.get("/api/users", (_req, res) => {
 });
 
 app.patch("/api/account/password", async (req, res) => {
-  const sessionUser = getRequestUser(req);
+  const sessionUser = requireWritableRequestUser(req, res);
   if (!sessionUser) {
-    res.status(401).json({ ok: false, message: "Nejdříve se přihlas." });
     return;
   }
 
