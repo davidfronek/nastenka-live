@@ -412,9 +412,16 @@ function applyNoteStatusToNote(note, nextStatus) {
   note.done = normalizedStatus === "done";
 
   if (normalizedStatus === "done") {
+    note.lastActivePosition = {
+      x: note.x,
+      y: note.y
+    };
     const stackPosition = getDoneStackPosition(note.id);
     note.x = stackPosition.x;
     note.y = stackPosition.y;
+  } else {
+    note.x = Number.isFinite(note.lastActivePosition?.x) ? note.lastActivePosition.x : 140;
+    note.y = Number.isFinite(note.lastActivePosition?.y) ? note.lastActivePosition.y : 120;
   }
 
   return true;
@@ -823,6 +830,10 @@ function restoreBoardFromSnapshot(snapshot) {
       deadline: String(item?.deadline || "").slice(0, 10),
       status: normalizeNoteStatus(item?.status, Boolean(item?.done)),
       done: normalizeNoteStatus(item?.status, Boolean(item?.done)) === "done",
+      lastActivePosition: {
+        x: Number.isFinite(item?.lastActivePosition?.x) ? item.lastActivePosition.x : undefined,
+        y: Number.isFinite(item?.lastActivePosition?.y) ? item.lastActivePosition.y : undefined
+      },
       color: sanitizeColor(item?.color) || "#ffe66e",
       format: sanitizeNoteFormat(item?.format),
       x: Number.isFinite(item?.position?.x) ? item.position.x : 140,
@@ -1051,6 +1062,7 @@ function saveBoardSnapshot(savedBy, kind = "manual") {
       deadline: note.deadline,
       status: getNoteStatus(note),
       done: note.done,
+      lastActivePosition: note.lastActivePosition || null,
       color: note.color,
       format: sanitizeNoteFormat(note.format),
       width: Number.isFinite(note.width) ? note.width : NOTE_DEFAULT_WIDTH,
