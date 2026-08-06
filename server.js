@@ -11,7 +11,8 @@ const {
   loadUsers: loadUsersFromFirestore,
   saveUsers: saveUsersToFirestore,
   saveSnapshot: saveSnapshotToFirestore,
-  saveActivityRun: saveActivityRunToFirestore
+  saveActivityRun: saveActivityRunToFirestore,
+  deleteLegacyActivityEntries: deleteLegacyActivityEntriesFromFirestore
 } = require("./firestore-storage");
 
 const app = express();
@@ -34,7 +35,7 @@ const noteResizeActivityByUser = new Map();
 const activity = [];
 const activityRuns = [];
 const activityRunId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const activityRunStartedAt = new Date().toISOString();
+const activityRunStartedAt = nowLocalTimestamp();
 const dataDir = path.join(__dirname, "data");
 const activityDir = path.join(dataDir, "activity");
 const legacySnapshotFilePath = path.join(dataDir, "board-snapshots.json");
@@ -79,13 +80,25 @@ function nowDate() {
   });
 }
 
+function nowLocalTimestamp(date = new Date()) {
+  return date.toLocaleString("sv-SE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  });
+}
+
 function addActivity(message) {
   activity.unshift({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     message,
     date: nowDate(),
     time: nowTime(),
-    createdAt: new Date().toISOString()
+    createdAt: nowLocalTimestamp()
   });
   if (activity.length > ACTIVITY_LIMIT) {
     activity.pop();
@@ -892,6 +905,62 @@ function getActivityEntriesForAnalysis() {
     const runId = path.basename(filePath, ".json");
     return readActivityEntries(filePath).map((entry) => ({ ...entry, runId }));
   });
+}
+
+async function deleteActivityEntries(entries) {
+  const selected = new Set(entries.map((entry) => `${String(entry.runId)}:${String(entry.id)}`));
+  let deletedCount = 0;
+
+  if (isFirestoreEnabled()) {
+    const legacyIds = [];
+    const runsToSave = [];
+    activityRuns.forEach((run) => {
+      const keptEntries = (Array.isArray(run.entries) ? run.entries : []).filter((entry) => {
+        const key = `${String(run.id)}:${String(entry.id)}`;
+        if (!selected.has(key)) {
+          return true;
+        }
+        if (run.id === "legacy") {
+          legacyIds.push(entry.id);
+        }
+        deletedCount += 1;
+        return false;
+      });
+
+      if (keptEntries.length !== (run.entries || []).length && run.id !== "legacy") {
+        run.entries = keptEntries;
+        run.updatedAt = nowLocalTimestamp();
+        runsToSave.push(saveActivityRunToFirestore(run));
+      }
+    });
+
+    await Promise.all(runsToSave);
+    if (legacyIds.length > 0) {
+      const legacyDeletedCount = await deleteLegacyActivityEntriesFromFirestore(legacyIds);
+      deletedCount = deletedCount - legacyIds.length + legacyDeletedCount;
+    }
+    activity.splice(0, activity.length, ...(activityRuns.find((run) => run.id === activityRunId)?.entries || []));
+  } else {
+    listActivityFilePaths().forEach((filePath) => {
+      const runId = path.basename(filePath, ".json");
+      const currentEntries = readActivityEntries(filePath);
+      const keptEntries = currentEntries.filter((entry) => {
+        if (!selected.has(`${runId}:${String(entry.id)}`)) {
+          return true;
+        }
+        deletedCount += 1;
+        return false;
+      });
+      if (keptEntries.length !== currentEntries.length) {
+        fs.writeFileSync(filePath, `${JSON.stringify(keptEntries, null, 2)}\n`, "utf-8");
+        if (runId === activityRunId) {
+          activity.splice(0, activity.length, ...keptEntries);
+        }
+      }
+    });
+  }
+
+  return deletedCount;
 }
 
 function readRegisteredUsers() {
@@ -1971,6 +2040,30 @@ app.get("/api/admin/activity", (req, res) => {
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 2000);
   res.json({ ok: true, total: entries.length, entries: entries.slice(0, limit) });
+});
+
+app.delete("/api/admin/activity", async (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+  const validEntries = entries
+    .filter((entry) => entry && String(entry.runId || "") && String(entry.id || ""))
+    .slice(0, 500)
+    .map((entry) => ({ runId: String(entry.runId), id: String(entry.id) }));
+  if (validEntries.length === 0) {
+    res.status(400).json({ ok: false, message: "Vyber alespoň jeden záznam ke smazání." });
+    return;
+  }
+
+  try {
+    const deletedCount = await deleteActivityEntries(validEntries);
+    io.emit("activity:list", activity);
+    res.json({ ok: true, deletedCount });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: `Mazání feedu se nepodařilo: ${error.message}` });
+  }
 });
 
 app.get("/api/admin/activity/export", (req, res) => {

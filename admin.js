@@ -30,6 +30,8 @@ const activityTo = document.querySelector("#activity-to");
 const clearActivityFiltersButton = document.querySelector("#clear-activity-filters");
 const activityStatus = document.querySelector("#activity-status");
 const activityResults = document.querySelector("#activity-results");
+const selectAllActivity = document.querySelector("#select-all-activity");
+const deleteSelectedActivityButton = document.querySelector("#delete-selected-activity");
 
 let currentUser = null;
 let sessionToken = "";
@@ -183,14 +185,52 @@ async function loadActivity() {
     activityResults.innerHTML = payload.entries.length
       ? payload.entries.map((entry) => `
         <article class="activity-entry">
+          <label class="activity-check"><input class="activity-checkbox" type="checkbox" data-run-id="${escapeHtml(entry.runId)}" data-entry-id="${escapeHtml(entry.id)}" /> <span class="sr-only">Vybrat záznam</span></label>
           <time>${escapeHtml(entry.createdAt || `${entry.date || ""} ${entry.time || ""}`)}</time>
           <span>${escapeHtml(entry.message)}</span>
           <small>běh ${escapeHtml(entry.runStartedAt || entry.runId || "neuveden")}</small>
         </article>`).join("")
       : '<p class="empty-state">Pro zadané filtry nebyly nalezeny žádné události.</p>';
+    selectAllActivity.checked = false;
+    updateActivitySelectionState();
     setStatus(activityStatus, `${payload.total} událostí nalezeno.`);
   } catch (error) {
     setStatus(activityStatus, error.message, true);
+  }
+}
+
+function getSelectedActivityEntries() {
+  return [...activityResults.querySelectorAll(".activity-checkbox:checked")].map((checkbox) => ({
+    runId: checkbox.dataset.runId,
+    id: checkbox.dataset.entryId
+  }));
+}
+
+function updateActivitySelectionState() {
+  const checkboxes = [...activityResults.querySelectorAll(".activity-checkbox")];
+  const selected = getSelectedActivityEntries();
+  deleteSelectedActivityButton.disabled = selected.length === 0;
+  selectAllActivity.checked = checkboxes.length > 0 && selected.length === checkboxes.length;
+  selectAllActivity.indeterminate = selected.length > 0 && selected.length < checkboxes.length;
+}
+
+async function deleteSelectedActivity() {
+  const entries = getSelectedActivityEntries();
+  if (entries.length === 0 || !window.confirm(`Opravdu smazat ${entries.length} označených záznamů?`)) {
+    return;
+  }
+
+  deleteSelectedActivityButton.disabled = true;
+  try {
+    const payload = await apiRequest("/api/admin/activity", {
+      method: "DELETE",
+      body: JSON.stringify({ entries })
+    });
+    await loadActivity();
+    setStatus(activityStatus, `${payload.deletedCount} záznamů smazáno.`);
+  } catch (error) {
+    setStatus(activityStatus, error.message, true);
+    updateActivitySelectionState();
   }
 }
 
@@ -308,6 +348,18 @@ clearActivityFiltersButton.addEventListener("click", () => {
   activityFilterForm.reset();
   loadActivity();
 });
+activityResults.addEventListener("change", (event) => {
+  if (event.target.classList.contains("activity-checkbox")) {
+    updateActivitySelectionState();
+  }
+});
+selectAllActivity.addEventListener("change", () => {
+  activityResults.querySelectorAll(".activity-checkbox").forEach((checkbox) => {
+    checkbox.checked = selectAllActivity.checked;
+  });
+  updateActivitySelectionState();
+});
+deleteSelectedActivityButton.addEventListener("click", deleteSelectedActivity);
 document.querySelector("#export-activity-json").addEventListener("click", () => downloadExport("/api/admin/activity/export", "json"));
 document.querySelector("#export-activity-csv").addEventListener("click", () => downloadExport("/api/admin/activity/export", "csv"));
 document.querySelector("#export-snapshots-json").addEventListener("click", () => downloadExport("/api/admin/snapshots/export", "json"));

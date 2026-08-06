@@ -104,11 +104,33 @@ async function saveActivityRun(run) {
   await db.collection("nastenka/activity/runs").doc(String(run.id)).set(run);
 }
 
+async function deleteLegacyActivityEntries(ids) {
+  const db = assertEnabled();
+  const idSet = new Set(ids.map((id) => String(id)));
+  const collection = db.collection("nastenka/activity/items");
+  const snapshot = await collection.get();
+  const batch = db.batch();
+  let deletedCount = 0;
+
+  snapshot.docs.forEach((item) => {
+    if (idSet.has(String(item.id)) || idSet.has(String(item.data()?.id))) {
+      batch.delete(item.ref);
+      deletedCount += 1;
+    }
+  });
+
+  if (deletedCount > 0) {
+    await batch.commit();
+  }
+  return deletedCount;
+}
+
 module.exports = {
   isFirestoreEnabled,
   initializeFirestoreStorage,
   loadUsers,
   saveUsers,
   saveSnapshot,
-  saveActivityRun
+  saveActivityRun,
+  deleteLegacyActivityEntries
 };
