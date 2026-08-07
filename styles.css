@@ -120,6 +120,8 @@ body {
 }
 
 .top-strip {
+  position: relative;
+  z-index: 1000;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -206,7 +208,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.58);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.08) 52%, rgba(255, 255, 255, 0.18)),
-    color-mix(in srgb, var(--user-color, #ff5d43) 78%, white);
+    linear-gradient(135deg, #dfe4e8, #aeb7c0);
   box-shadow:
     0 7px 14px rgba(15, 23, 42, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.38);
@@ -232,7 +234,7 @@ body {
   transform: translateY(-1px);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.14) 52%, rgba(255, 255, 255, 0.24)),
-    color-mix(in srgb, var(--user-color, #ff5d43) 84%, white);
+    linear-gradient(135deg, #eef1f3, #bcc5cc);
   color: rgba(17, 24, 39, 0.92);
   box-shadow:
     0 10px 18px rgba(15, 23, 42, 0.16),
@@ -285,6 +287,13 @@ body {
   margin: 0;
   padding: 5px 9px;
   font-size: 0.78rem;
+  opacity: 1;
+  cursor: pointer;
+}
+
+.presence-message-actions button:hover,
+.presence-message-actions button:focus-visible {
+  opacity: 1;
 }
 
 .presence-message-status {

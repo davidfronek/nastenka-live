@@ -1336,7 +1336,6 @@ function renderPresence() {
       chip.className = "user-chip";
       chip.type = "button";
       chip.title = `Poslat zprávu uživateli ${user.name}`;
-      chip.style.setProperty("--user-color", user.color || "#ff5d43");
       chip.textContent = user.name;
       chip.addEventListener("click", () => openPresenceMessage(user));
       presence.append(chip);
