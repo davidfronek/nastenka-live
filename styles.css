@@ -206,11 +206,13 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.58);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.08) 52%, rgba(255, 255, 255, 0.18)),
-    color-mix(in srgb, var(--user-color, #ff5d43) 62%, white);
+    color-mix(in srgb, var(--user-color, #ff5d43) 78%, white);
   box-shadow:
     0 7px 14px rgba(15, 23, 42, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.38);
   color: rgba(17, 24, 39, 0.86);
+  cursor: pointer;
+  font-family: inherit;
   font-weight: 600;
   font-size: 0.84rem;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
@@ -228,9 +230,68 @@ body {
 
 .user-chip:hover {
   transform: translateY(-1px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.14) 52%, rgba(255, 255, 255, 0.24)),
+    color-mix(in srgb, var(--user-color, #ff5d43) 84%, white);
+  color: rgba(17, 24, 39, 0.92);
   box-shadow:
     0 10px 18px rgba(15, 23, 42, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.presence-message-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  width: auto;
+  margin: 0;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.presence-message-form {
+  width: min(420px, 100%);
+  padding: 18px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.24);
+  display: grid;
+  gap: 8px;
+}
+
+.presence-message-heading {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.presence-message-form input {
+  width: 100%;
+  min-width: 0;
+}
+
+.presence-message-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.presence-message-actions button {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  padding: 5px 9px;
+  font-size: 0.78rem;
+}
+
+.presence-message-status {
+  min-height: 1.1rem;
+  margin: 0;
+  color: #b42318;
+  font-size: 0.74rem;
 }
 
 .workspace {
@@ -1166,6 +1227,60 @@ button:focus-visible {
   min-height: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.user-alerts {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  width: min(320px, calc(100% - 32px));
+  pointer-events: none;
+}
+
+.user-alert {
+  position: relative;
+  padding: 13px 38px 13px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  background: rgba(255, 251, 235, 0.97);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+  color: #422006;
+  pointer-events: auto;
+  animation: user-alert-in 180ms ease-out;
+}
+
+.user-alert strong {
+  display: block;
+  font-size: 0.84rem;
+}
+
+.user-alert p {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.user-alert-close {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #78350f;
+  font-size: 1.2rem;
+}
+
+@keyframes user-alert-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .board::-webkit-scrollbar {

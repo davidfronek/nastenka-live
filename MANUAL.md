@@ -12,6 +12,7 @@ Nástěnka Live slouží k zadávání, delegování a sledování úkolů v re�
 - [Filtrace a hromadné akce](#filtrace-a-hromadné-akce)
 - [Spojnice](#spojnice)
 - [Živý feed](#živý-feed)
+- [Zprávy uživatelům](#zprávy-uživatelům)
 - [Snapshoty](#snapshoty)
 - [Účet a heslo](#účet-a-heslo)
 - [Administrace](#administrace)
@@ -111,6 +112,10 @@ Konce spojnice se automaticky přepočítávají při přesunu nebo změně veli
 **Živý feed** zobrazuje poslední události, například vytvoření, přesunutí, úpravu, vyřešení nebo smazání ticketu. Časy se zobrazují v časovém pásmu Europe/Prague.
 
 Po každém spuštění serveru začíná nový běh feedu. Starší události zůstávají uložené a administrátor je může vyhledávat a exportovat v části **Analýza live feedu**.
+
+## Zprávy uživatelům
+
+Klikněte na jméno připojeného uživatele v přehledu v horní části obrazovky. Otevře se samostatné modální okno, do kterého napište zprávu a odešlete ji tlačítkem **Odeslat**. Zpráva se zobrazí pouze vybranému příjemci jako dočasné upozornění v pravé horní části pracovní plochy. Host zprávy posílat nemůže.
 
 ## Snapshoty
 

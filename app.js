@@ -125,6 +125,8 @@ const appShell = document.querySelector("#app-shell");
 const meBadge = document.querySelector("#me-badge");
 const accountAdminLink = document.querySelector("#account-admin-link");
 const logoutBtn = document.querySelector("#logout-btn");
+const presenceMessagePanel = document.querySelector("#presence-message-panel");
+const userAlerts = document.querySelector("#user-alerts");
 
 const board = document.querySelector("#board");
 const boardCanvas = document.querySelector("#board-canvas") || board;
@@ -1327,13 +1329,101 @@ function renderBoardInlinePalette() {
 
 function renderPresence() {
   presence.innerHTML = "";
-  onlineUsers.forEach((user) => {
-    const chip = document.createElement("span");
-    chip.className = "user-chip";
-    chip.style.setProperty("--user-color", user.color || "#ff5d43");
-    chip.textContent = user.name;
-    presence.append(chip);
+  onlineUsers
+    .filter((user) => user.id !== me?.id)
+    .forEach((user) => {
+      const chip = document.createElement("button");
+      chip.className = "user-chip";
+      chip.type = "button";
+      chip.title = `Poslat zprávu uživateli ${user.name}`;
+      chip.style.setProperty("--user-color", user.color || "#ff5d43");
+      chip.textContent = user.name;
+      chip.addEventListener("click", () => openPresenceMessage(user));
+      presence.append(chip);
+    });
+}
+
+function closePresenceMessage() {
+  presenceMessagePanel?.classList.add("hidden");
+  presenceMessagePanel?.removeAttribute("aria-modal");
+  if (presenceMessagePanel) {
+    presenceMessagePanel.innerHTML = "";
+  }
+}
+
+function openPresenceMessage(user) {
+  if (!presenceMessagePanel || !user?.id || user.id === me?.id) {
+    return;
+  }
+
+  presenceMessagePanel.innerHTML = `
+    <form class="presence-message-form">
+      <div class="presence-message-heading">Zpráva pro <strong></strong></div>
+      <input name="message" type="text" maxlength="500" placeholder="Napiš zprávu..." autocomplete="off" required />
+      <div class="presence-message-actions">
+        <button type="submit">Odeslat</button>
+        <button type="button" class="secondary-btn presence-message-cancel">Zrušit</button>
+      </div>
+      <p class="presence-message-status" aria-live="polite"></p>
+    </form>`;
+  presenceMessagePanel.querySelector("strong").textContent = user.name;
+  presenceMessagePanel.setAttribute("role", "dialog");
+  presenceMessagePanel.setAttribute("aria-modal", "true");
+  presenceMessagePanel.setAttribute("aria-label", `Zpráva pro ${user.name}`);
+  presenceMessagePanel.classList.remove("hidden");
+  presenceMessagePanel.onclick = (event) => {
+    if (event.target === presenceMessagePanel) {
+      closePresenceMessage();
+    }
+  };
+
+  const form = presenceMessagePanel.querySelector("form");
+  const input = form.querySelector("input");
+  const status = form.querySelector(".presence-message-status");
+  form.querySelector(".presence-message-cancel").addEventListener("click", closePresenceMessage);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const message = input.value.trim();
+    if (!message) {
+      return;
+    }
+    status.textContent = "Odesílám...";
+    socket.emit("user:message", { targetId: user.id, message }, (response) => {
+      if (!response?.ok) {
+        status.textContent = response?.message || "Zprávu se nepodařilo odeslat.";
+        return;
+      }
+      closePresenceMessage();
+    });
   });
+  input.focus();
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !presenceMessagePanel?.classList.contains("hidden")) {
+    closePresenceMessage();
+  }
+});
+
+function showUserAlert({ from, message }) {
+  if (!userAlerts) {
+    return;
+  }
+  const alert = document.createElement("article");
+  alert.className = "user-alert";
+  const title = document.createElement("strong");
+  title.textContent = `Zpráva od ${from}`;
+  const body = document.createElement("p");
+  body.textContent = message;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "user-alert-close";
+  close.setAttribute("aria-label", "Zavřít upozornění");
+  close.textContent = "×";
+  close.addEventListener("click", () => alert.remove());
+  alert.append(title, close, body);
+  userAlerts.append(alert);
+  window.setTimeout(() => alert.remove(), 10000);
 }
 
 function getAssignableNames() {
@@ -4489,6 +4579,8 @@ socket.on("users:list", (users) => {
   renderUserSelects();
   renderBoard();
 });
+
+socket.on("user:message", showUserAlert);
 
 socket.on("connection:created", (connection) => {
   if (!noteConnections.some((item) => item.fromId === connection.fromId && item.toId === connection.toId)

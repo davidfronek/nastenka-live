@@ -1488,6 +1488,32 @@ io.on("connection", (socket) => {
     addActivity(`${user.name} se odhlásil/a (online: ${getOnlineUserCount()})`);
   });
 
+  socket.on("user:message", ({ targetId, message }, ack) => {
+    const sender = usersBySocket.get(socket.id);
+    const targetSocketId = String(targetId || "").trim();
+    const cleanMessage = String(message || "").trim().slice(0, 500);
+    const target = usersBySocket.get(targetSocketId);
+
+    if (!sender || isGuest(sender)) {
+      ack?.({ ok: false, message: "Zprávy mohou posílat pouze přihlášení uživatelé." });
+      return;
+    }
+    if (!cleanMessage) {
+      ack?.({ ok: false, message: "Napiš zprávu." });
+      return;
+    }
+    if (!target || target.id === sender.id) {
+      ack?.({ ok: false, message: "Vybraný uživatel už není připojený." });
+      return;
+    }
+
+    io.to(target.id).emit("user:message", {
+      from: sender.name,
+      message: cleanMessage
+    });
+    ack?.({ ok: true });
+  });
+
   socket.on("note:create", (payload) => {
     const user = usersBySocket.get(socket.id);
     if (!user) {
