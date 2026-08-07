@@ -1,151 +1,143 @@
-# Nástěnka Live: uživatelský manuál
+# Nástěnka Live
 
-Nástěnka Live je společná online plocha pro zadávání, delegování a sledování ticketů v reálném čase. Změny provedené jedním uživatelem se zobrazí ostatním připojeným uživatelům.
+> **Uživatelská příručka** pro společnou online plochu ticketů.
 
-## 1. Přihlášení
+Nástěnka Live slouží k zadávání, delegování a sledování úkolů v reálném čase. Změna provedená jedním uživatelem se po aktivním připojení zobrazí ostatním uživatelům.
+
+## Obsah
+
+- [Přístup a oprávnění](#přístup-a-oprávnění)
+- [Rozhraní](#rozhraní)
+- [Ticket](#ticket)
+- [Filtrace a hromadné akce](#filtrace-a-hromadné-akce)
+- [Spojnice](#spojnice)
+- [Živý feed](#živý-feed)
+- [Snapshoty](#snapshoty)
+- [Účet a heslo](#účet-a-heslo)
+- [Administrace](#administrace)
+- [Řešení potíží](#řešení-potíží)
+
+## Přístup a oprávnění
+
+### Přihlášení
 
 1. Otevřete adresu Nástěnky Live.
-2. Přihlaste se e-mailem a heslem.
-3. Pokud potřebujete pouze prohlížet plochu, můžete zvolit **Pokračovat jako host**.
+2. Zadejte e-mail a heslo.
+3. Pokud potřebujete pouze náhled, zvolte **Pokračovat jako host**.
 
-Host má přístup pouze pro náhled. Po přihlášení se mu skryje levý nástrojový dock a editační ovládání ticketů. Může si prohlížet tickety, feed a online uživatele, ale nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, měnit texty, spravovat spojnice, ukládat nebo obnovovat snapshoty ani měnit heslo. Host nemá vlastní registrovaný účet ani heslo.
+Po přihlášení se v horní liště zobrazí vaše jméno, seznam online uživatelů a pro administrátory odkaz **Správa uživatelů**.
 
-Po přihlášení se v horní části zobrazí vaše jméno, počet online uživatelů a případně odkaz **Správa uživatelů**, pokud máte administrátorskou roli.
+### Host
 
-## 2. Orientace v nástěnce
+Host může prohlížet plochu, tickety, živý feed a online uživatele. Nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, spravovat spojnice, pracovat se snapshoty ani měnit heslo. Host nemá vlastní účet.
 
-Vlevo je svislý dock s hlavními nástroji:
+### Role
 
-- **Nový ticket**: otevře formulář pro vytvoření ticketu.
-- **Filtrace**: zobrazí pouze tickety vybraného řešitele.
-- **Zálohy**: ruční uložení a obnova posledního snapshotu.
-- **Můj účet**: změna vlastního hesla.
-- **Spojnice**: propojení dvou ticketů čárou.
+Přihlášený uživatel může podle svého oprávnění pracovat s obsahem nástěnky. Autor obvykle upravuje a maže své aktivní tickety; administrátor má rozšířená oprávnění včetně správy uživatelů a historie.
 
-Po kliknutí na nástroj se otevře odpovídající panel. Dalším kliknutím lze panel zavřít.
+## Rozhraní
 
-Nástrojový dock a editační ovládání jsou dostupné pouze přihlášeným uživatelům s oprávněním měnit obsah. Host v režimu náhledu vidí pouze plochu, feed, online uživatele a možnost odhlášení.
+Levá svislá lišta obsahuje nástroje. Kliknutím nástroj otevřete, dalším kliknutím jeho panel zavřete.
 
-## 3. Vytvoření ticketu
+| Nástroj | Účel |
+| --- | --- |
+| **Nový ticket** | Vytvoření a delegování ticketu. |
+| **Filtrace** | Zobrazení ticketů podle řešitele. |
+| **Zálohy** | Uložení nebo obnova snapshotu plochy. |
+| **Můj účet** | Změna vlastního hesla. |
+| **Spojnice** | Propojení dvou ticketů čárou. |
+| **?** | Otevření tohoto manuálu. |
 
-Ticket můžete vytvořit přes panel **Nový ticket** nebo rychlým vytvořením přímo na ploše.
+Plocha se pohybuje jako pracovní plátno. Vpravo najdete živý feed a přehled online uživatelů.
 
-Vyplňte:
+## Ticket
+
+### Vytvoření
+
+Otevřete **Nový ticket** nebo použijte rychlé vytvoření přímo na ploše. Vyplňte:
 
 - **Zadání**: popis úkolu nebo požadavku.
-- **Autor**: vyplní se automaticky podle přihlášeného uživatele.
-- **Řešitelé**: jeden nebo více uživatelů, kterým je ticket určen.
+- **Autor**: doplní se automaticky.
+- **Řešitelé**: jeden nebo více uživatelů.
 - **Priorita**: nízká, střední nebo vysoká.
 - **Do data**: volitelný termín dokončení.
 - **Barva**: barva ticketu na ploše.
 
-V editoru zadání lze použít tučné písmo, kurzívu, velikost a zarovnání textu. K dispozici je také vložení smajlíku nebo textu ze schránky.
+Editor zadání podporuje tučné písmo, kurzívu, tři velikosti textu, zarovnání, smajlíky a vložení textu ze schránky. Ticket odešlete tlačítkem **Přidat ticket**; změna se okamžitě synchronizuje.
 
-Ticket vytvoříte tlačítkem **Přidat ticket**. Nový ticket se okamžitě zobrazí všem připojeným uživatelům.
+### Úpravy
 
-## 4. Práce s ticketem
+Kliknutím ticket otevřete a přetažením ho přesunete. Podle oprávnění můžete měnit obsah a velikost, upravit delegování, označit ticket jako vyřešený nebo ho smazat.
 
-Tickety můžete na ploše přesouvat přetažením. Kliknutím na ticket otevřete jeho náhled s podrobnostmi.
+### Vyřešení
 
-Podle oprávnění můžete:
+Klikněte na **Vyřešeno**. Ticket se přesune do archivu vyřešených ticketů. Pokud je archiv mimo aktuální výřez, zobrazí se vlevo dole směrová informace; kliknutím na ni přejdete k vyřešeným ticketům. Vyřešený ticket lze obnovit nebo odstranit.
 
-- ticket upravit,
-- změnit jeho velikost,
-- označit ho jako vyřešený,
-- obnovit vyřešený ticket zpět na plochu,
-- ticket smazat.
+## Filtrace a hromadné akce
 
-Autor může upravovat a mazat své aktivní tickety. Administrátor má rozšířená oprávnění. U vyřešených ticketů se zobrazí ovládání pro jejich obnovení nebo odstranění.
+V panelu **Filtrace** vyberte řešitele. Plocha zobrazí tickety přiřazené danému uživateli.
 
-### Označení jako vyřešený
+Pro hromadnou akci vyberte více ticketů přímo na ploše. Podle oprávnění je můžete označit jako vyřešené, upravit nebo smazat. Trvalé smazání vyžaduje potvrzení.
 
-Klikněte na tlačítko **Vyřešeno**. Ticket se přesune do archivu vyřešených ticketů. Pokud jsou vyřešené tickety mimo aktuální výřez plochy, zobrazí se informace o jejich směru v levém spodním rohu. Kliknutím na tuto informaci se plocha přesune k vyřešeným ticketům.
+## Spojnice
 
-## 5. Filtrace a výběr více ticketů
-
-V panelu **Filtrace** vyberte řešitele. Plocha se zaměří na tickety přiřazené vybranému uživateli.
-
-Pro hromadné operace použijte výběr ticketů na ploše. Poté lze podle dostupných oprávnění:
-
-- hromadně označit tickety jako vyřešené,
-- smazat vybrané tickety,
-- upravit vybraný ticket.
-
-Před trvalým smazáním aplikace zobrazí potvrzovací dialog.
-
-## 6. Spojování ticketů
-
-1. Klikněte na ikonu **Spojnice**.
+1. Klikněte na **Spojnice**.
 2. Klikněte na první ticket.
 3. Klikněte na druhý ticket.
 
-Po výběru prvního ticketu se zvýrazní začátek spojnice a kurzor upozorní na režim přichycování. Mezi tickety se vytvoří spojnice, jejíž konce jsou umístěné s malým odstupem od hran ticketů. Při přesouvání nebo změně velikosti ticketu se její konce automaticky přepočítají.
+Konce spojnice se automaticky přepočítávají při přesunu nebo změně velikosti ticketu. Kliknutím na existující spojnici ji vyberete. Poté můžete ponechat její začátek a zvolit nový konec pomocí **Upravit spojnici**, nebo ji po potvrzení odstranit tlačítkem **Smazat spojnici**.
 
-Kliknutím na existující spojnici ji vyberete. Poté můžete:
+## Živý feed
 
-- **Upravit spojnici**: ponechat první ticket a kliknutím zvolit nový koncový ticket,
-- **Smazat spojnici**: po potvrzení spojení trvale odstranit.
+**Živý feed** zobrazuje poslední události, například vytvoření, přesunutí, úpravu, vyřešení nebo smazání ticketu. Časy se zobrazují v časovém pásmu Europe/Prague.
 
-Opětovným použitím nástroje lze vytvořit další spojení. Spojnice jsou součástí snapshotů.
+Po každém spuštění serveru začíná nový běh feedu. Starší události zůstávají uložené a administrátor je může vyhledávat a exportovat v části **Analýza live feedu**.
 
-## 7. Živý feed a online uživatelé
+## Snapshoty
 
-V pravé části nástěnky je **Živý feed**. Zobrazuje poslední události, například vytvoření, přesunutí, úpravu, vyřešení nebo smazání ticketu.
-
-Feed začíná po každém spuštění serveru znovu. Starší události se nemažou automaticky; administrátor je může vyhledávat a exportovat v části **Analýza live feedu**.
-
-Časy ve feedu jsou zobrazovány v časovém pásmu Europe/Prague.
-
-## 8. Snapshoty a obnova plochy
-
-V panelu **Zálohy** jsou k dispozici dvě akce:
+Panel **Zálohy** nabízí:
 
 - **Uložit snapshot nyní**: uloží aktuální stav plochy.
 - **Obnovit poslední snapshot**: načte nejnovější uložený stav.
 
-Server navíc ukládá změněnou plochu automaticky jednou za pět minut. Uchovávají se pouze tři nejnovější snapshoty.
+Server ukládá změněnou plochu automaticky jednou za pět minut a uchovává tři nejnovější snapshoty. Snapshot obsahuje aktivní i vyřešené tickety, textové prvky, spojnice, pozice, rozměry, formátování a metadata.
 
-Snapshot obsahuje:
+Obnova nahradí aktuální stav plochy. Použijte ji proto pouze tehdy, když chcete obnovit uloženou verzi.
 
-- aktivní i vyřešené tickety,
-- textové prvky,
-- spojnice,
-- pozice a rozměry,
-- formátování a metadata ticketů.
+## Účet a heslo
 
-Obnova snapshotu nahradí aktuální stav plochy. Používejte ji proto pouze tehdy, když chcete obnovit uloženou verzi.
-
-## 9. Změna hesla
-
-1. Otevřete panel **Můj účet**.
+1. Otevřete **Můj účet**.
 2. Zadejte aktuální heslo.
-3. Zadejte nové heslo.
-4. Nové heslo zopakujte v poli pro potvrzení.
-5. Klikněte na **Změnit heslo**.
+3. Zadejte a zopakujte nové heslo.
+4. Klikněte na **Změnit heslo**.
 
-Nové heslo musí mít alespoň 6 znaků a musí se lišit od původního hesla. Po úspěšné změně zůstává aktuální přihlášení aktivní.
+Heslo musí mít alespoň 6 znaků a musí se lišit od původního. Po změně zůstává přihlášení aktivní. Zapomenuté heslo může resetovat administrátor.
 
-Pokud si heslo nepamatujete, požádejte administrátora o jeho resetování.
+Odhlásíte se tlačítkem **Odhlásit** v horní části obrazovky.
 
-## 10. Administrace
+## Administrace
 
-Administrátorský účet má v horní liště odkaz **Správa uživatelů**.
+Administrátor otevře **Správa uživatelů** v horní liště. Může:
 
-Administrátor může:
-
-- vytvořit účet,
-- upravit uživatelské jméno, e-mail, roli a barvu,
-- nastavit nebo resetovat heslo,
-- účet smazat,
+- vytvářet, upravovat a mazat účty,
+- měnit uživatelské jméno, e-mail, roli a barvu,
+- nastavovat nebo resetovat hesla,
 - vyhledávat historické události podle textu, uživatele a data,
 - mazat vybrané záznamy aktivity,
-- exportovat feed ve formátu JSON nebo CSV,
-- exportovat snapshoty ve formátu JSON nebo CSV.
+- exportovat live feed i snapshoty ve formátu JSON nebo CSV.
 
-Při úpravě existujícího uživatele není nutné heslo vyplňovat, pokud ho nechcete změnit.
+Při úpravě účtu není nutné vyplňovat heslo, pokud ho nechcete změnit.
 
-## 11. Odhlášení
+## Řešení potíží
 
-Klikněte na **Odhlásit** v horní části obrazovky. Odhlášení ukončí všechna otevřená připojení stejné session.
+### Změny se nezobrazují
 
-Při problémech s připojením stránku obnovte a zkontrolujte, zda používáte správný účet. Změny se synchronizují pouze při aktivním připojení k serveru.
+Obnovte stránku a zkontrolujte, zda používáte správný účet. Synchronizace probíhá pouze při aktivním připojení k serveru.
+
+### Nevidím nástroje pro úpravy
+
+Pravděpodobně jste přihlášeni jako host nebo váš účet nemá oprávnění měnit obsah.
+
+### Nemohu obnovit snapshot
+
+Obnova je dostupná pouze přihlášeným uživatelům s odpovídajícím oprávněním. Ověřte také, zda byl snapshot skutečně uložen.

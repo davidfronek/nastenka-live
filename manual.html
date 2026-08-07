@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nástěnka Live | Manuál</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --ink: #172033;
+        --muted: #5d6878;
+        --line: #dbe1e8;
+        --paper: #ffffff;
+        --wash: #f4f6f8;
+        --accent: #334155;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: linear-gradient(135deg, #eef2f5, #fbfaf7 58%, #e9eef2);
+        font-family: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+        line-height: 1.65;
+      }
+      .page { width: min(1120px, calc(100% - 32px)); margin: 32px auto 64px; }
+      .wiki-header, .wiki-nav, main { background: var(--paper); border: 1px solid var(--line); }
+      .wiki-header { padding: clamp(28px, 6vw, 64px); border-bottom: 0; }
+      .eyebrow { color: var(--muted); font-size: .76rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+      h1, h2, h3 { line-height: 1.2; }
+      h1 { margin: 8px 0 12px; font-size: clamp(2rem, 5vw, 4rem); }
+      h2 { margin: 0 0 18px; padding-bottom: 8px; border-bottom: 2px solid var(--line); font-size: 1.65rem; }
+      h3 { margin-top: 28px; font-size: 1.15rem; }
+      p { margin: 0 0 16px; }
+      .lead { max-width: 720px; color: var(--muted); font-size: 1.08rem; }
+      .wiki-nav { padding: 22px clamp(22px, 5vw, 48px); background: var(--wash); }
+      .wiki-nav ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 24px; margin: 12px 0 0; padding-left: 20px; }
+      a { color: #1f4f75; font-weight: 600; }
+      main { padding: clamp(24px, 5vw, 52px); }
+      section { max-width: 820px; margin: 0 auto 48px; }
+      section:last-child { margin-bottom: 0; }
+      li { margin: 5px 0; }
+      table { width: 100%; border-collapse: collapse; margin: 18px 0 8px; }
+      th, td { padding: 11px 14px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { background: var(--wash); }
+      code { padding: 2px 5px; border-radius: 4px; background: var(--wash); }
+      .note { margin: 18px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--wash); }
+      @media (max-width: 640px) {
+        .page { width: 100%; margin: 0; }
+        .wiki-header, .wiki-nav, main { border-right: 0; border-left: 0; }
+        table { display: block; overflow-x: auto; white-space: nowrap; }
+        td:last-child, th:last-child { white-space: normal; min-width: 180px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="wiki-header">
+        <div class="eyebrow">Nástěnka Live / Uživatelská příručka</div>
+        <h1>Nástěnka Live</h1>
+        <p class="lead">Společná online plocha pro zadávání, delegování a sledování ticketů v reálném čase.</p>
+      </header>
+
+      <nav class="wiki-nav" aria-label="Obsah manuálu">
+        <strong>Obsah</strong>
+        <ul>
+          <li><a href="#pristup">Přístup a oprávnění</a></li>
+          <li><a href="#rozhrani">Rozhraní</a></li>
+          <li><a href="#ticket">Ticket</a></li>
+          <li><a href="#filtrace">Filtrace a hromadné akce</a></li>
+          <li><a href="#spojnice">Spojnice</a></li>
+          <li><a href="#feed">Živý feed</a></li>
+          <li><a href="#snapshoty">Snapshoty</a></li>
+          <li><a href="#ucet">Účet a heslo</a></li>
+          <li><a href="#administrace">Administrace</a></li>
+          <li><a href="#potize">Řešení potíží</a></li>
+        </ul>
+      </nav>
+
+      <main>
+        <section id="pristup">
+          <h2>Přístup a oprávnění</h2>
+          <h3>Přihlášení</h3>
+          <ol><li>Otevřete adresu Nástěnky Live.</li><li>Zadejte e-mail a heslo.</li><li>Pro pouhý náhled zvolte <strong>Pokračovat jako host</strong>.</li></ol>
+          <p>Po přihlášení se v horní liště zobrazí vaše jméno, online uživatelé a administrátorům odkaz <strong>Správa uživatelů</strong>.</p>
+          <h3>Host a role</h3>
+          <p>Host může prohlížet plochu, tickety, živý feed a online uživatele. Nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, spravovat spojnice, pracovat se snapshoty ani měnit heslo.</p>
+          <p>Autor obvykle upravuje a maže své aktivní tickety. Administrátor má rozšířená oprávnění včetně správy uživatelů a historie.</p>
+        </section>
+
+        <section id="rozhrani">
+          <h2>Rozhraní</h2>
+          <p>Levá svislá lišta obsahuje nástroje. Kliknutím nástroj otevřete, dalším kliknutím jeho panel zavřete.</p>
+          <table><thead><tr><th>Nástroj</th><th>Účel</th></tr></thead><tbody>
+            <tr><td><strong>Nový ticket</strong></td><td>Vytvoření a delegování ticketu.</td></tr>
+            <tr><td><strong>Filtrace</strong></td><td>Zobrazení ticketů podle řešitele.</td></tr>
+            <tr><td><strong>Zálohy</strong></td><td>Uložení nebo obnova snapshotu plochy.</td></tr>
+            <tr><td><strong>Můj účet</strong></td><td>Změna vlastního hesla.</td></tr>
+            <tr><td><strong>Spojnice</strong></td><td>Propojení dvou ticketů čárou.</td></tr>
+            <tr><td><strong>?</strong></td><td>Otevření tohoto manuálu.</td></tr>
+          </tbody></table>
+          <p>Vpravo najdete živý feed a přehled online uživatelů. Plocha se pohybuje jako pracovní plátno.</p>
+        </section>
+
+        <section id="ticket">
+          <h2>Ticket</h2>
+          <h3>Vytvoření</h3>
+          <p>Otevřete <strong>Nový ticket</strong> nebo použijte rychlé vytvoření přímo na ploše. Vyplňte zadání, řešitele, prioritu, termín a barvu. Autor se doplní automaticky.</p>
+          <p>Editor podporuje tučné písmo, kurzívu, tři velikosti textu, zarovnání, smajlíky a vložení textu ze schránky. Ticket odešlete tlačítkem <strong>Přidat ticket</strong>.</p>
+          <h3>Úpravy a vyřešení</h3>
+          <p>Ticket otevřete kliknutím a přesunete přetažením. Podle oprávnění můžete měnit jeho obsah a velikost, upravit delegování nebo ho smazat.</p>
+          <p>Kliknutím na <strong>Vyřešeno</strong> ticket přesunete do archivu. Pokud je archiv mimo výřez, zobrazí se vlevo dole směrová informace. Vyřešený ticket lze obnovit nebo odstranit.</p>
+        </section>
+
+        <section id="filtrace">
+          <h2>Filtrace a hromadné akce</h2>
+          <p>V panelu <strong>Filtrace</strong> vyberte řešitele. Plocha zobrazí tickety přiřazené danému uživateli.</p>
+          <p>Pro hromadnou akci vyberte více ticketů přímo na ploše. Podle oprávnění je můžete označit jako vyřešené, upravit nebo smazat. Trvalé smazání vyžaduje potvrzení.</p>
+        </section>
+
+        <section id="spojnice">
+          <h2>Spojnice</h2>
+          <ol><li>Klikněte na <strong>Spojnice</strong>.</li><li>Klikněte na první ticket.</li><li>Klikněte na druhý ticket.</li></ol>
+          <p>Konce spojnice se automaticky přepočítávají při přesunu nebo změně velikosti ticketu. Existující spojnici vyberete kliknutím. Poté můžete použít <strong>Upravit spojnici</strong> nebo po potvrzení <strong>Smazat spojnici</strong>.</p>
+        </section>
+
+        <section id="feed">
+          <h2>Živý feed</h2>
+          <p><strong>Živý feed</strong> zobrazuje vytvoření, přesunutí, úpravu, vyřešení a smazání ticketu. Časy se zobrazují v časovém pásmu Europe/Prague.</p>
+          <p>Po každém spuštění serveru začíná nový běh feedu. Starší události zůstávají uložené a administrátor je může vyhledávat a exportovat.</p>
+        </section>
+
+        <section id="snapshoty">
+          <h2>Snapshoty</h2>
+          <ul><li><strong>Uložit snapshot nyní</strong> uloží aktuální stav plochy.</li><li><strong>Obnovit poslední snapshot</strong> načte nejnovější uložený stav.</li></ul>
+          <p>Server ukládá změněnou plochu automaticky jednou za pět minut a uchovává tři nejnovější snapshoty. Snapshot obsahuje tickety, textové prvky, spojnice, pozice, rozměry, formátování a metadata.</p>
+          <div class="note">Obnova nahradí aktuální stav plochy. Použijte ji pouze tehdy, když chcete obnovit uloženou verzi.</div>
+        </section>
+
+        <section id="ucet">
+          <h2>Účet a heslo</h2>
+          <ol><li>Otevřete <strong>Můj účet</strong>.</li><li>Zadejte aktuální heslo.</li><li>Zadejte a zopakujte nové heslo.</li><li>Klikněte na <strong>Změnit heslo</strong>.</li></ol>
+          <p>Heslo musí mít alespoň 6 znaků a musí se lišit od původního. Zapomenuté heslo může resetovat administrátor. Odhlásíte se tlačítkem <strong>Odhlásit</strong>.</p>
+        </section>
+
+        <section id="administrace">
+          <h2>Administrace</h2>
+          <p>Administrátor otevře <strong>Správa uživatelů</strong> v horní liště. Může vytvářet, upravovat a mazat účty, měnit údaje a role, nastavovat hesla, vyhledávat historii, mazat aktivitu a exportovat feed i snapshoty ve formátu JSON nebo CSV.</p>
+          <p>Při úpravě účtu není nutné vyplňovat heslo, pokud ho nechcete změnit.</p>
+        </section>
+
+        <section id="potize">
+          <h2>Řešení potíží</h2>
+          <h3>Změny se nezobrazují</h3><p>Obnovte stránku a zkontrolujte účet. Synchronizace probíhá pouze při aktivním připojení k serveru.</p>
+          <h3>Nevidím nástroje pro úpravy</h3><p>Pravděpodobně jste přihlášeni jako host nebo váš účet nemá oprávnění měnit obsah.</p>
+          <h3>Nemohu obnovit snapshot</h3><p>Ověřte oprávnění a také to, zda byl snapshot skutečně uložen.</p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
