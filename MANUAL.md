@@ -25,7 +25,9 @@ Nástěnka Live slouží k zadávání, delegování a sledování úkolů v re�
 2. Zadejte e-mail a heslo.
 3. Pokud potřebujete pouze náhled, zvolte **Pokračovat jako host**.
 
-Po přihlášení se v horní liště zobrazí vaše jméno, seznam online uživatelů a pro administrátory odkaz **Správa uživatelů**.
+Po přihlášení se v horní liště zobrazí vaše jméno a seznam online uživatelů.
+
+![Přihlašovací obrazovka](./manual-assets/login-screen.png)
 
 ### Host
 
@@ -44,17 +46,32 @@ Levá svislá lišta obsahuje nástroje. Kliknutím nástroj otevřete, dalším
 | **Nový ticket** | Vytvoření a delegování ticketu. |
 | **Filtrace** | Zobrazení ticketů podle řešitele. |
 | **Zálohy** | Uložení nebo obnova snapshotu plochy. |
-| **Můj účet** | Změna vlastního hesla. |
 | **Spojnice** | Propojení dvou ticketů čárou. |
+| **Můj účet** | Změna vlastního hesla. |
 | **?** | Otevření tohoto manuálu. |
 
 Plocha se pohybuje jako pracovní plátno. Vpravo najdete živý feed a přehled online uživatelů.
+
+![Hlavní plocha s levou lištou a živým feedem](./manual-assets/board-overview.png)
 
 ## Ticket
 
 ### Vytvoření
 
-Otevřete **Nový ticket** nebo použijte rychlé vytvoření přímo na ploše. Vyplňte:
+Ticket může vytvořit přihlášený uživatel s oprávněním k úpravám. Host režim slouží pouze k prohlížení.
+
+1. V levé liště klikněte na **Nový ticket**. Alternativně klikněte na volné místo pracovní plochy a v nabídce **Co chceš přidat?** zvolte **ticket**.
+2. Do pole **Zadání** napište popis úkolu. Text můžete formátovat tučně, kurzívou, velikostí, zarovnáním nebo doplnit smajlíkem.
+3. V poli **Autor** zkontrolujte automaticky doplněné jméno.
+4. V poli **Řešitelé** vyberte jednoho nebo více uživatelů. Více položek vyberete pomocí klávesy Ctrl nebo Shift.
+5. Nastavte **Prioritu**: nízkou, střední nebo vysokou.
+6. Volitelně vyplňte **Do data**.
+7. Vyberte **Barvu**, která ticket odliší na ploše.
+8. Klikněte na **Přidat ticket**. Ticket se objeví na ploše a změna se rozešle ostatním připojeným uživatelům.
+
+![Formulář pro vytvoření ticketu](./manual-assets/ticket-form.svg)
+
+Formulář obsahuje:
 
 - **Zadání**: popis úkolu nebo požadavku.
 - **Autor**: doplní se automaticky.
@@ -63,11 +80,13 @@ Otevřete **Nový ticket** nebo použijte rychlé vytvoření přímo na ploše.
 - **Do data**: volitelný termín dokončení.
 - **Barva**: barva ticketu na ploše.
 
-Editor zadání podporuje tučné písmo, kurzívu, tři velikosti textu, zarovnání, smajlíky a vložení textu ze schránky. Ticket odešlete tlačítkem **Přidat ticket**; změna se okamžitě synchronizuje.
+Editor zadání podporuje tučné písmo, kurzívu, tři velikosti textu, zarovnání, smajlíky a vložení textu ze schránky. Pokud potřebujete vytvořit pouze text bez ticketu, použijte rychlou volbu **Čistý text**.
+
+![Náhled pracovní plochy](./manual-assets/board-overview.png)
 
 ### Úpravy
 
-Kliknutím ticket otevřete a přetažením ho přesunete. Podle oprávnění můžete měnit obsah a velikost, upravit delegování, označit ticket jako vyřešený nebo ho smazat.
+Kliknutím ticket otevřete. Přetažením ho přesunete po ploše; úchyt na jeho okraji použijete ke změně velikosti. Podle oprávnění můžete změnit zadání, formátování, řešitele, prioritu, termín a barvu. Uložení změny se automaticky synchronizuje.
 
 ### Vyřešení
 
@@ -106,27 +125,38 @@ Obnova nahradí aktuální stav plochy. Použijte ji proto pouze tehdy, když ch
 
 ## Účet a heslo
 
-1. Otevřete **Můj účet**.
-2. Zadejte aktuální heslo.
-3. Zadejte a zopakujte nové heslo.
-4. Klikněte na **Změnit heslo**.
+Otevřete **Můj účet** kliknutím na ikonu účtu v levé liště.
+
+1. Zadejte aktuální heslo.
+2. Zadejte a zopakujte nové heslo.
+3. Klikněte na **Změnit heslo**.
 
 Heslo musí mít alespoň 6 znaků a musí se lišit od původního. Po změně zůstává přihlášení aktivní. Zapomenuté heslo může resetovat administrátor.
 
-Odhlásíte se tlačítkem **Odhlásit** v horní části obrazovky.
+Odhlásíte se tlačítkem **Odhlásit** v levé liště, které je umístěné pod ikonou **Můj účet**.
 
 ## Administrace
 
-Administrátor otevře **Správa uživatelů** v horní liště. Může:
+Administrace je samostatná stránka na adrese `/admin.html`. Administrátor otevře **Můj účet** kliknutím na své jméno nebo ikonou účtu v levé liště; uvnitř panelu se zobrazí odkaz **Správa uživatelů**. Odkaz není samostatným tlačítkem v levé liště. Administrátor se přihlásí svým e-mailem a heslem.
+
+![Přihlášení do administrace](./manual-assets/admin-login.png)
+
+Administrátor může:
 
 - vytvářet, upravovat a mazat účty,
 - měnit uživatelské jméno, e-mail, roli a barvu,
 - nastavovat nebo resetovat hesla,
 - vyhledávat historické události podle textu, uživatele a data,
 - mazat vybrané záznamy aktivity,
-- exportovat live feed i snapshoty ve formátu JSON nebo CSV.
+- exportovat live feed a snapshoty ve formátu JSON nebo CSV.
 
 Při úpravě účtu není nutné vyplňovat heslo, pokud ho nechcete změnit.
+
+### Kompletní reset nástěnky
+
+V dolní části administrace je nevratná operace **Kompletní reset nástěnky**. Po zadání aktuálního hesla a přesného potvrzení `RESET` odstraní všechny tickety, texty, spojnice, snapshoty a záznamy aktivity. Uživatelské účty zůstanou zachované.
+
+Před resetem ověřte, že data už nepotřebujete. Operaci nelze vrátit běžnou obnovou snapshotu.
 
 ## Řešení potíží
 

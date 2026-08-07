@@ -45,8 +45,7 @@
         </div>
 
         <div class="top-meta">
-          <button id="me-badge" class="account-badge" type="button" aria-label="Otevřít můj účet" aria-expanded="false" aria-controls="dock-section-account"></button>
-          <button id="logout-btn" class="top-logout hidden" type="button">Odhlásit</button>
+          <div id="me-badge" class="account-badge" aria-live="polite"></div>
           <div class="presence" id="presence"></div>
         </div>
       </header>
@@ -87,10 +86,18 @@
                 </svg>
               </span>
             </button>
-            <button id="dock-toggle-account" class="dock-btn" type="button" aria-label="Můj účet" data-hint="Můj účet">
+            <button id="dock-toggle-account" class="dock-btn dock-account-start" type="button" aria-label="Můj účet" data-hint="Můj účet">
               <span class="dock-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
                   <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"></path>
+                </svg>
+              </span>
+            </button>
+            <button id="logout-btn" class="dock-btn" type="button" aria-label="Odhlásit" data-hint="Odhlásit">
+              <span class="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                  <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v-2H5V6h5z"></path>
+                  <path d="m14 7-1.4 1.4 2.6 2.6H8v2h7.2l-2.6 2.6L14 17l5-5z"></path>
                 </svg>
               </span>
             </button>

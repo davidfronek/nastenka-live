@@ -48,6 +48,9 @@
       th { background: var(--wash); }
       code { padding: 2px 5px; border-radius: 4px; background: var(--wash); }
       .note { margin: 18px 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--wash); }
+      .manual-figure { margin: 24px 0 30px; }
+      .manual-figure img { display: block; width: 100%; max-width: 560px; height: auto; border: 1px solid var(--line); box-shadow: 0 12px 28px rgba(23, 32, 51, .12); }
+      .manual-figure figcaption { margin-top: 8px; color: var(--muted); font-size: .9rem; }
       @media (max-width: 640px) {
         .page { width: 100%; margin: 0; }
         .wiki-header, .wiki-nav, main { border-right: 0; border-left: 0; }
@@ -85,7 +88,8 @@
           <h2>Přístup a oprávnění</h2>
           <h3>Přihlášení</h3>
           <ol><li>Otevřete adresu Nástěnky Live.</li><li>Zadejte e-mail a heslo.</li><li>Pro pouhý náhled zvolte <strong>Pokračovat jako host</strong>.</li></ol>
-          <p>Po přihlášení se v horní liště zobrazí vaše jméno, online uživatelé a administrátorům odkaz <strong>Správa uživatelů</strong>.</p>
+          <p>Po přihlášení se v horní liště zobrazí vaše jméno a seznam online uživatelů.</p>
+          <figure class="manual-figure"><img src="./manual-assets/login-screen.png" alt="Přihlašovací obrazovka Nástěnky Live" loading="lazy"><figcaption>Přihlášení do Nástěnky Live nebo pokračování v režimu hosta.</figcaption></figure>
           <h3>Host a role</h3>
           <p>Host může prohlížet plochu, tickety, živý feed a online uživatele. Nemůže vytvářet, upravovat, přesouvat, řešit ani mazat tickety, spravovat spojnice, pracovat se snapshoty ani měnit heslo.</p>
           <p>Autor obvykle upravuje a maže své aktivní tickety. Administrátor má rozšířená oprávnění včetně správy uživatelů a historie.</p>
@@ -97,21 +101,34 @@
           <table><thead><tr><th>Nástroj</th><th>Účel</th></tr></thead><tbody>
             <tr><td><strong>Nový ticket</strong></td><td>Vytvoření a delegování ticketu.</td></tr>
             <tr><td><strong>Filtrace</strong></td><td>Zobrazení ticketů podle řešitele.</td></tr>
+            <tr><td><strong>Spojnice</strong></td><td>Propojení dvou ticketů čárou.</td></tr>
             <tr><td><strong>Zálohy</strong></td><td>Uložení nebo obnova snapshotu plochy.</td></tr>
             <tr><td><strong>Můj účet</strong></td><td>Změna vlastního hesla.</td></tr>
-            <tr><td><strong>Spojnice</strong></td><td>Propojení dvou ticketů čárou.</td></tr>
             <tr><td><strong>?</strong></td><td>Otevření tohoto manuálu.</td></tr>
           </tbody></table>
           <p>Vpravo najdete živý feed a přehled online uživatelů. Plocha se pohybuje jako pracovní plátno.</p>
+          <figure class="manual-figure"><img src="./manual-assets/board-overview.png" alt="Hlavní plocha s levou lištou a živým feedem" loading="lazy"><figcaption>Plocha s nástroji vlevo a živým feedem vpravo.</figcaption></figure>
         </section>
 
         <section id="ticket">
           <h2>Ticket</h2>
           <h3>Vytvoření</h3>
-          <p>Otevřete <strong>Nový ticket</strong> nebo použijte rychlé vytvoření přímo na ploše. Vyplňte zadání, řešitele, prioritu, termín a barvu. Autor se doplní automaticky.</p>
-          <p>Editor podporuje tučné písmo, kurzívu, tři velikosti textu, zarovnání, smajlíky a vložení textu ze schránky. Ticket odešlete tlačítkem <strong>Přidat ticket</strong>.</p>
+          <p>Ticket může vytvořit přihlášený uživatel s oprávněním k úpravám. Host režim slouží pouze k prohlížení.</p>
+          <ol>
+            <li>V levé liště klikněte na <strong>Nový ticket</strong>. Alternativně klikněte na volné místo plochy a v nabídce <strong>Co chceš přidat?</strong> zvolte <strong>ticket</strong>.</li>
+            <li>Do pole <strong>Zadání</strong> napište popis úkolu. Text můžete formátovat tučně, kurzívou, velikostí, zarovnáním nebo doplnit smajlíkem.</li>
+            <li>V poli <strong>Autor</strong> zkontrolujte automaticky doplněné jméno.</li>
+            <li>V poli <strong>Řešitelé</strong> vyberte jednoho nebo více uživatelů. Více položek vyberete pomocí klávesy Ctrl nebo Shift.</li>
+            <li>Nastavte <strong>Prioritu</strong>: nízkou, střední nebo vysokou.</li>
+            <li>Volitelně vyplňte <strong>Do data</strong>.</li>
+            <li>Vyberte <strong>Barvu</strong>, která ticket odliší na ploše.</li>
+            <li>Klikněte na <strong>Přidat ticket</strong>. Ticket se objeví na ploše a změna se rozešle ostatním připojeným uživatelům.</li>
+          </ol>
+          <figure class="manual-figure"><img src="./manual-assets/ticket-form.svg" alt="Formulář pro vytvoření ticketu" loading="lazy"><figcaption>Formulář Nový ticket s poli pro zadání, delegování a parametry.</figcaption></figure>
+          <p>Editor podporuje tučné písmo, kurzívu, tři velikosti textu, zarovnání, smajlíky a vložení textu ze schránky. Pokud potřebujete vytvořit pouze text bez ticketu, použijte rychlou volbu <strong>Čistý text</strong>.</p>
+          <figure class="manual-figure"><img src="./manual-assets/board-overview.png" alt="Náhled pracovní plochy Nástěnky Live" loading="lazy"><figcaption>Ticket se po vytvoření zobrazí jako karta přímo na pracovní ploše.</figcaption></figure>
           <h3>Úpravy a vyřešení</h3>
-          <p>Ticket otevřete kliknutím a přesunete přetažením. Podle oprávnění můžete měnit jeho obsah a velikost, upravit delegování nebo ho smazat.</p>
+          <p>Kliknutím ticket otevřete. Přetažením ho přesunete po ploše; úchyt na jeho okraji použijete ke změně velikosti. Podle oprávnění můžete změnit zadání, formátování, řešitele, prioritu, termín a barvu. Uložení změny se automaticky synchronizuje.</p>
           <p>Kliknutím na <strong>Vyřešeno</strong> ticket přesunete do archivu. Pokud je archiv mimo výřez, zobrazí se vlevo dole směrová informace. Vyřešený ticket lze obnovit nebo odstranit.</p>
         </section>
 
@@ -142,14 +159,20 @@
 
         <section id="ucet">
           <h2>Účet a heslo</h2>
-          <ol><li>Otevřete <strong>Můj účet</strong>.</li><li>Zadejte aktuální heslo.</li><li>Zadejte a zopakujte nové heslo.</li><li>Klikněte na <strong>Změnit heslo</strong>.</li></ol>
-          <p>Heslo musí mít alespoň 6 znaků a musí se lišit od původního. Zapomenuté heslo může resetovat administrátor. Odhlásíte se tlačítkem <strong>Odhlásit</strong>.</p>
+          <p>Otevřete <strong>Můj účet</strong> kliknutím na ikonu účtu v levé liště.</p>
+          <ol><li>Zadejte aktuální heslo.</li><li>Zadejte a zopakujte nové heslo.</li><li>Klikněte na <strong>Změnit heslo</strong>.</li></ol>
+          <p>Heslo musí mít alespoň 6 znaků a musí se lišit od původního. Po změně zůstává přihlášení aktivní. Odhlásíte se tlačítkem <strong>Odhlásit</strong> v levé liště pod ikonou <strong>Můj účet</strong>.</p>
         </section>
 
         <section id="administrace">
           <h2>Administrace</h2>
-          <p>Administrátor otevře <strong>Správa uživatelů</strong> v horní liště. Může vytvářet, upravovat a mazat účty, měnit údaje a role, nastavovat hesla, vyhledávat historii, mazat aktivitu a exportovat feed i snapshoty ve formátu JSON nebo CSV.</p>
+          <p>Administrace je samostatná stránka na adrese <code>/admin.html</code>. Administrátor otevře <strong>Můj účet</strong> kliknutím na své jméno nebo ikonou účtu v levé liště; uvnitř panelu se zobrazí odkaz <strong>Správa uživatelů</strong>. Odkaz není samostatným tlačítkem v levé liště. Administrátor se přihlásí svým e-mailem a heslem.</p>
+          <figure class="manual-figure"><img src="./manual-assets/admin-login.png" alt="Přihlašovací obrazovka administrace" loading="lazy"><figcaption>Samostatné přihlášení do administrace.</figcaption></figure>
+          <p>Administrátor může vytvářet, upravovat a mazat účty, měnit údaje a role, nastavovat hesla, vyhledávat historii, mazat aktivitu a exportovat feed i snapshoty ve formátu JSON nebo CSV.</p>
           <p>Při úpravě účtu není nutné vyplňovat heslo, pokud ho nechcete změnit.</p>
+          <h3>Kompletní reset nástěnky</h3>
+          <p>V dolní části administrace je nevratná operace <strong>Kompletní reset nástěnky</strong>. Po zadání aktuálního hesla a přesného potvrzení <code>RESET</code> odstraní všechny tickety, texty, spojnice, snapshoty a záznamy aktivity. Uživatelské účty zůstanou zachované.</p>
+          <div class="note">Před resetem ověřte, že data už nepotřebujete. Operaci nelze vrátit běžnou obnovou snapshotu.</div>
         </section>
 
         <section id="potize">

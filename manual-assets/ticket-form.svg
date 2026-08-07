@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="620" viewBox="0 0 760 620" role="img" aria-labelledby="title desc">
+  <title id="title">Formulář pro vytvoření ticketu</title>
+  <desc id="desc">Náhled formuláře Nový ticket s poli Zadání, Autor, Řešitelé, Priorita, Do data a Barva.</desc>
+  <rect width="760" height="620" rx="18" fill="#eef2f5"/>
+  <rect x="48" y="32" width="664" height="556" rx="12" fill="#fff" stroke="#dbe1e8"/>
+  <rect x="48" y="32" width="664" height="78" rx="12" fill="#334155"/>
+  <text x="78" y="70" fill="#fff" font-family="Arial, sans-serif" font-size="24" font-weight="700">Nový ticket</text>
+  <text x="78" y="94" fill="#dbe4ee" font-family="Arial, sans-serif" font-size="14">Vyplň zadání a rychle ho deleguj kolegovi.</text>
+  <text x="78" y="145" fill="#172033" font-family="Arial, sans-serif" font-size="14" font-weight="700">Zadání</text>
+  <rect x="78" y="157" width="604" height="96" rx="7" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="96" y="190" fill="#7a8798" font-family="Arial, sans-serif" font-size="14">Například: Finální kontrola textu...</text>
+  <text x="78" y="286" fill="#172033" font-family="Arial, sans-serif" font-size="14" font-weight="700">Autor</text>
+  <rect x="78" y="298" width="286" height="42" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="94" y="324" fill="#64748b" font-family="Arial, sans-serif" font-size="14">doplní se automaticky</text>
+  <text x="396" y="286" fill="#172033" font-family="Arial, sans-serif" font-size="14" font-weight="700">Řešitelé</text>
+  <rect x="396" y="298" width="286" height="42" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="412" y="324" fill="#64748b" font-family="Arial, sans-serif" font-size="14">vyber jednoho nebo více</text>
+  <text x="78" y="380" fill="#172033" font-family="Arial, sans-serif" font-size="14" font-weight="700">Priorita</text>
+  <rect x="78" y="392" width="190" height="42" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="94" y="418" fill="#334155" font-family="Arial, sans-serif" font-size="14">Střední</text>
+  <text x="294" y="380" fill="#172033" font-family="Arial, sans-serif" font-size="14" font-weight="700">Do data</text>
+  <rect x="294" y="392" width="190" height="42" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="310" y="418" fill="#64748b" font-family="Arial, sans-serif" font-size="14">volitelné</text>
+  <text x="510" y="380" fill="#172033" font-family="Arial, sans-serif" font-size="14" font-weight="700">Barva</text>
+  <rect x="510" y="392" width="172" height="42" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <circle cx="536" cy="413" r="11" fill="#ff5d43"/><circle cx="566" cy="413" r="11" fill="#ffd166"/><circle cx="596" cy="413" r="11" fill="#06d6a0"/><circle cx="626" cy="413" r="11" fill="#4dabf7"/>
+  <rect x="78" y="478" width="604" height="58" rx="8" fill="#334155"/>
+  <text x="380" y="514" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="17" font-weight="700">Přidat ticket</text>
+</svg>

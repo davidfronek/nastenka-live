@@ -178,15 +178,13 @@ body {
   padding: 7px 12px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 12px;
-  background: linear-gradient(145deg, #f3f4f6 0%, #cbd5e1 48%, #94a3b8 100%);
-  color: #263241;
+  background: linear-gradient(145deg, #ffffff 0%, #e2e8f0 52%, #cbd5e1 100%);
+  color: #475569;
   font-size: 0.84rem;
   font-weight: 700;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-  box-shadow: 0 7px 14px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  cursor: pointer;
+  box-shadow: 0 5px 11px rgba(15, 23, 42, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.86);
   opacity: 1;
-  transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .account-badge::before {
@@ -197,32 +195,6 @@ body {
   background: linear-gradient(120deg, transparent 18%, rgba(255, 255, 255, 0.52) 46%, transparent 70%);
   transform: translateX(-115%);
   transition: transform 420ms ease;
-}
-
-.account-badge:hover,
-.account-badge[aria-expanded="true"] {
-  transform: translateY(-1px);
-  background: linear-gradient(145deg, #94a3b8 0%, #64748b 52%, #475569 100%);
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.45);
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.82);
-}
-
-.account-badge:hover::before,
-.account-badge[aria-expanded="true"]::before {
-  transform: translateX(115%);
-}
-
-.account-badge:focus-visible {
-  outline: 2px solid rgba(71, 85, 105, 0.48);
-  outline-offset: 3px;
-}
-
-.top-logout {
-  padding: var(--btn-pad-y) var(--btn-pad-x);
-  border-radius: 10px;
-  background: var(--primary-strong);
-  font-size: var(--btn-font-size);
 }
 
 .user-chip {
@@ -299,6 +271,10 @@ body {
 
 .dock-secondary-start {
   margin-top: 4px;
+}
+
+.dock-account-start {
+  margin-top: 32px;
 }
 
 .dock-btn {

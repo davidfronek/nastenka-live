@@ -1125,7 +1125,6 @@ function closeDockPanel() {
   dockToggleFilter?.classList.remove("active");
   dockToggleBackups?.classList.remove("active");
   dockToggleAccount?.classList.remove("active");
-  meBadge?.setAttribute("aria-expanded", "false");
 }
 
 function openDockSection(section) {
@@ -1155,7 +1154,6 @@ function openDockSection(section) {
   dockToggleFilter?.classList.toggle("active", section === "filter");
   dockToggleBackups?.classList.toggle("active", section === "backups");
   dockToggleAccount?.classList.toggle("active", section === "account");
-  meBadge?.setAttribute("aria-expanded", String(section === "account"));
   setCreationControlsVisibility(section === "note");
 }
 
@@ -1176,8 +1174,6 @@ function logoutLocally() {
   activeTextPointerId = null;
 
   meBadge.textContent = "";
-  meBadge?.setAttribute("aria-expanded", "false");
-  meBadge?.setAttribute("disabled", "disabled");
   accountAdminLink?.classList.add("hidden");
   logoutBtn?.classList.add("hidden");
   appShell.classList.add("hidden");
@@ -1335,7 +1331,7 @@ function renderPresence() {
     const chip = document.createElement("span");
     chip.className = "user-chip";
     chip.style.setProperty("--user-color", user.color || "#ff5d43");
-    chip.textContent = `${user.name} online`;
+    chip.textContent = user.name;
     presence.append(chip);
   });
 }
@@ -3493,12 +3489,6 @@ dockToggleAccount?.addEventListener("click", () => {
   openDockSection("account");
 });
 
-meBadge?.addEventListener("click", () => {
-  if (me?.role !== "guest") {
-    openDockSection("account");
-  }
-});
-
 connectNotesBtn?.addEventListener("click", () => {
   setConnectionMode(!connectionMode);
 });
@@ -4449,7 +4439,6 @@ socket.on("auth:ok", (user) => {
   appShell.classList.remove("hidden");
   appShell.classList.toggle("guest-mode", me.role === "guest");
   meBadge.textContent = `Přihlášen: ${me.name}`;
-  meBadge?.toggleAttribute("disabled", me.role === "guest");
   accountAdminLink?.classList.toggle("hidden", me.role !== "admin");
   logoutBtn?.classList.remove("hidden");
   setAuthorFieldValue(fromUser, me.name);
