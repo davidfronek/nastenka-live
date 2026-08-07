@@ -84,8 +84,18 @@ a { color: var(--blue); font-weight: 600; }
 .form-heading, .list-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
 .form-row { display: grid; grid-template-columns: 1fr 70px; gap: 12px; align-items: end; }
 .user-list { display: grid; gap: 8px; }
-.user-row { display: grid; grid-template-columns: 14px minmax(150px, 1fr) auto auto; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--line); }
-.user-color { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.1); }
+.user-transfer { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.user-transfer .panel-description { margin-bottom: 12px; }
+.user-transfer-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.file-picker { flex: 1 1 220px; min-width: 200px; }
+.file-picker input { min-height: 38px; padding: 7px 9px; font-size: 0.8rem; }
+.user-transfer-actions button { min-height: 38px; }
+.user-transfer .status { margin-top: 12px; overflow-wrap: anywhere; }
+.admin-modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 18px; background: rgba(17, 24, 39, 0.42); }
+.admin-modal-card { width: min(720px, 100%); max-height: min(760px, 100%); overflow: auto; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: var(--shadow); }
+.admin-modal-card .list-heading { margin-bottom: 12px; }
+.import-template { margin: 16px 0; padding: 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: #111827; color: #f8fafc; font: 0.8rem/1.6 "Cascadia Code", Consolas, monospace; white-space: pre; }
+.user-row { display: grid; grid-template-columns: minmax(150px, 1fr) auto auto; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--line); }
 .user-details { display: grid; gap: 3px; min-width: 0; }
 .user-details strong, .user-details span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-details span { color: var(--muted); font-size: 0.84rem; }
@@ -132,7 +142,7 @@ a { color: var(--blue); font-weight: 600; }
   .admin-header { align-items: start; flex-direction: column; }
   .admin-grid { grid-template-columns: 1fr; }
   .user-form { position: static; }
-  .user-row { grid-template-columns: 14px minmax(0, 1fr) auto; }
+  .user-row { grid-template-columns: minmax(0, 1fr) auto; }
   .role-badge { grid-column: 2; grid-row: 2; justify-self: start; }
   .row-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
   .activity-filters { grid-template-columns: 1fr 1fr; }

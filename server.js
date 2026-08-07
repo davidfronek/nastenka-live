@@ -324,6 +324,71 @@ function csvCell(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
+function parseCsvRows(content) {
+  const source = String(content || "").replace(/^\uFEFF/, "");
+  const firstLine = source.split(/\r?\n/, 1)[0] || "";
+  const delimiter = firstLine.includes(";") && !firstLine.includes(",") ? ";" : ",";
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const nextCharacter = source[index + 1];
+    if (character === '"') {
+      if (quoted && nextCharacter === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === delimiter && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && nextCharacter === "\n") {
+        index += 1;
+      }
+      row.push(cell);
+      if (row.some((value) => String(value).trim())) {
+        rows.push(row);
+      }
+      row = [];
+      cell = "";
+    } else {
+      cell += character;
+    }
+  }
+
+  if (cell || row.length) {
+    row.push(cell);
+    if (row.some((value) => String(value).trim())) {
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+function normalizeImportHeader(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getUserExportData() {
+  return readRegisteredUsers().map((item) => ({
+    id: String(item.id || ""),
+    username: sanitizeUser(item.username),
+    email: sanitizeEmail(item.email),
+    role: sanitizeRole(item.role),
+    createdAt: item.createdAt || null
+  }));
+}
+
 function sendDownload(res, fileName, content, contentType) {
   res.setHeader("Content-Type", `${contentType}; charset=utf-8`);
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
@@ -1209,7 +1274,7 @@ function restoreBoardFromLatestSnapshot() {
   return restoreBoardFromSnapshot(latestSnapshot);
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 function emitUsers() {
   const uniqueUsers = new Map();
@@ -2211,15 +2276,118 @@ app.get("/api/admin/users", (req, res) => {
     return;
   }
 
-  const users = readRegisteredUsers().map((item) => ({
-    id: String(item.id || ""),
-    username: sanitizeUser(item.username),
-    email: sanitizeEmail(item.email),
-    role: sanitizeRole(item.role),
-    defaultColor: String(item.defaultColor || "#ff5d43"),
-    createdAt: item.createdAt || null
-  }));
-  res.json({ ok: true, users });
+  res.json({ ok: true, users: getUserExportData() });
+});
+
+app.get("/api/admin/users/export", (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const users = getUserExportData();
+  const format = String(req.query.format || "json").toLowerCase();
+  if (format === "csv") {
+    const rows = ["id,username,email,role,createdAt"];
+    users.forEach((user) => rows.push([
+      user.id,
+      user.username,
+      user.email,
+      user.role,
+      user.createdAt
+    ].map(csvCell).join(",")));
+    sendDownload(res, "nastenka-uzivatele.csv", `\uFEFF${rows.join("\n")}`, "text/csv");
+    return;
+  }
+
+  sendDownload(res, "nastenka-uzivatele.json", JSON.stringify(users, null, 2), "application/json");
+});
+
+app.post("/api/admin/users/import", async (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+
+  const csv = String(req.body?.csv || "");
+  if (!csv.trim()) {
+    res.status(400).json({ ok: false, message: "Vyber CSV soubor se seznamem uživatelů." });
+    return;
+  }
+  if (Buffer.byteLength(csv, "utf8") > 1024 * 1024) {
+    res.status(413).json({ ok: false, message: "Importovaný soubor je příliš velký (maximum je 1 MB)." });
+    return;
+  }
+
+  const rows = parseCsvRows(csv);
+  if (rows.length < 2) {
+    res.status(400).json({ ok: false, message: "CSV musí obsahovat hlavičku a alespoň jeden řádek." });
+    return;
+  }
+  if (rows.length > 501) {
+    res.status(400).json({ ok: false, message: "Import může obsahovat nejvýše 500 uživatelů." });
+    return;
+  }
+
+  const headers = rows[0].map(normalizeImportHeader);
+  const getColumn = (aliases) => headers.findIndex((header) => aliases.includes(header));
+  const usernameColumn = getColumn(["username", "uzivatelskejmeno", "uzivatel", "jmeno"]);
+  const emailColumn = getColumn(["email", "mail"]);
+  const passwordColumn = getColumn(["password", "heslo", "prihlasovaciudaje"]);
+  const roleColumn = getColumn(["role", "roleuzivatele", "opravneni"]);
+  const colorColumn = getColumn(["defaultcolor", "color", "barva"]);
+  if (usernameColumn === -1 || emailColumn === -1 || passwordColumn === -1) {
+    res.status(400).json({ ok: false, message: "CSV musí obsahovat sloupce username, email a password." });
+    return;
+  }
+
+  const users = readRegisteredUsers();
+  const existingEmails = new Set(users.map((item) => sanitizeEmail(item.email)));
+  const existingUsernames = new Set(users.map((item) => sanitizeUser(item.username).toLowerCase()));
+  const errors = [];
+  let createdCount = 0;
+  let skippedCount = 0;
+
+  rows.slice(1).forEach((row, rowIndex) => {
+    const line = rowIndex + 2;
+    const username = sanitizeUser(row[usernameColumn]);
+    const email = sanitizeEmail(row[emailColumn]);
+    const password = sanitizePassword(row[passwordColumn]);
+    const rawRole = roleColumn === -1 ? "user" : String(row[roleColumn] || "").trim().toLowerCase();
+    const role = rawRole === "admin" || rawRole === "administrator" ? "admin" : rawRole === "user" || rawRole === "uzivatel" || rawRole === "uzivatelka" || rawRole === "" ? "user" : null;
+    const defaultColor = colorColumn === -1 ? "#ff5d43" : sanitizeColor(row[colorColumn]) || "#ff5d43";
+
+    if (!username || !email || !isEmailValid(email) || password.length < 6 || !role) {
+      const reason = !password ? "chybí heslo" : "neplatné jméno, e-mail, heslo, role nebo barva";
+      errors.push(`Řádek ${line}: ${reason}.`);
+      skippedCount += 1;
+      return;
+    }
+    if (existingEmails.has(email) || existingUsernames.has(username.toLowerCase())) {
+      skippedCount += 1;
+      return;
+    }
+
+    users.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${createdCount}`,
+      username,
+      email,
+      role,
+      passwordHash: hashPassword(password),
+      defaultColor,
+      createdAt: new Date().toISOString()
+    });
+    existingEmails.add(email);
+    existingUsernames.add(username.toLowerCase());
+    createdCount += 1;
+  });
+
+  try {
+    if (createdCount > 0) {
+      await saveRegisteredUsers(users);
+    }
+    res.json({ ok: true, createdCount, skippedCount, errors });
+  } catch {
+    res.status(500).json({ ok: false, message: "Uložení importovaných uživatelů se nepodařilo." });
+  }
 });
 
 app.post("/api/admin/users", async (req, res) => {

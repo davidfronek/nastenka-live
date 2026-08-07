@@ -62,10 +62,7 @@
             <label>Uživatelské jméno<input id="user-username" maxlength="30" required /></label>
             <label>E-mail<input id="user-email" type="email" maxlength="120" required /></label>
             <label>Heslo <span id="password-hint">(povinné)</span><input id="user-password" type="password" minlength="6" maxlength="120" /></label>
-            <div class="form-row">
-              <label>Role<select id="user-role"><option value="user">Uživatel</option><option value="admin">Administrátor</option></select></label>
-              <label>Barva<input id="user-color" type="color" value="#ff5d43" /></label>
-            </div>
+            <label>Role<select id="user-role"><option value="user">Uživatel</option><option value="admin">Administrátor</option></select></label>
             <button id="save-user" type="submit">Vytvořit účet</button>
             <p id="user-status" class="status" role="alert"></p>
           </form>
@@ -77,8 +74,37 @@
             </div>
             <div id="user-list" class="user-list"></div>
             <p id="list-status" class="status" role="alert"></p>
+            <div class="user-transfer">
+              <div class="eyebrow">HROMADNÁ SPRÁVA</div>
+              <p class="panel-description">Importujte CSV soubor připravený v Excelu. Povinné sloupce: <code>username</code>, <code>email</code>, <code>password</code>. Exportovaný soubor bez hesel proto nelze znovu importovat.</p>
+              <div class="user-transfer-actions">
+                <label class="file-picker">Vybrat CSV soubor<input id="users-import-file" type="file" accept=".csv,text/csv" /></label>
+                <button id="import-users" class="small-button" type="button">Importovat uživatele</button>
+                <button id="show-users-import-template" class="small-button" type="button">Zobrazit vzor CSV</button>
+                <button id="export-users-json" class="small-button" type="button">Export JSON</button>
+                <button id="export-users-csv" class="small-button" type="button">Export CSV</button>
+              </div>
+              <p id="user-transfer-status" class="status" role="alert"></p>
+            </div>
           </section>
         </section>
+
+        <div id="users-import-template-modal" class="admin-modal hidden" role="dialog" aria-modal="true" aria-labelledby="users-import-template-title">
+          <div class="admin-modal-card">
+            <div class="list-heading">
+              <div>
+                <div class="eyebrow">IMPORT UŽIVATELŮ</div>
+                <h2 id="users-import-template-title">Vzor CSV souboru</h2>
+              </div>
+              <button id="close-users-import-template" class="icon-button" type="button" aria-label="Zavřít vzor CSV">×</button>
+            </div>
+            <p class="panel-description">Zkopírujte obsah do Excelu nebo textového souboru a uložte ho jako CSV. Každý účet musí mít vlastní heslo dlouhé alespoň 6 znaků.</p>
+            <pre class="import-template"><code>username,email,password,role
+novak.jan,jan.novak@example.com,TajneHeslo123,user
+admin.klara,klara.admin@example.com,JesteJineHeslo,admin</code></pre>
+            <button id="close-users-import-template-bottom" class="small-button" type="button">Zavřít</button>
+          </div>
+        </div>
 
         <section class="analysis-panel">
           <div class="list-heading">

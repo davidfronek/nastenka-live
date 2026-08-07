@@ -149,13 +149,21 @@ Administrace je samostatná stránka na adrese `/admin.html`. Administrátor ote
 Administrátor může:
 
 - vytvářet, upravovat a mazat účty,
-- měnit uživatelské jméno, e-mail, roli a barvu,
+- měnit uživatelské jméno, e-mail a roli,
 - nastavovat nebo resetovat hesla,
+- hromadně vytvářet účty importem CSV souboru připraveného v Excelu,
+- exportovat seznam účtů ve formátu JSON nebo CSV bez hesel,
 - vyhledávat historické události podle textu, uživatele a data,
 - mazat vybrané záznamy aktivity,
 - exportovat live feed a snapshoty ve formátu JSON nebo CSV.
 
 Při úpravě účtu není nutné vyplňovat heslo, pokud ho nechcete změnit.
+
+### Hromadný import a export uživatelů
+
+V části **Hromadná správa** vyberte CSV soubor, který může být připravený a uložený z Excelu. Povinné sloupce jsou `username`, `email` a `password`; volitelný sloupec je `role` (`user` nebo `admin`). Lze použít i běžné české názvy sloupců, například `Uživatelské jméno`, `E-mail`, `Heslo` a `Role`. Účty se stejným e-mailem nebo uživatelským jménem se přeskočí a existující účty se nepřepisují. Import podporuje nejvýše 500 řádků.
+
+Tlačítka **Export JSON** a **Export CSV** stáhnou seznam účtů včetně jména, e-mailu, role a data vytvoření. Hesla ani jejich uložené hashe se nikdy neexportují, takže exportovaný soubor nelze přímo použít jako importní předlohu. Importní CSV obsahuje hesla v čitelné podobě, proto ho po importu bezpečně odstraňte a nesdílejte.
 
 ### Kompletní reset nástěnky
 

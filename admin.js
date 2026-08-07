@@ -14,7 +14,6 @@ const emailInput = document.querySelector("#user-email");
 const passwordInput = document.querySelector("#user-password");
 const passwordHint = document.querySelector("#password-hint");
 const roleInput = document.querySelector("#user-role");
-const colorInput = document.querySelector("#user-color");
 const formTitle = document.querySelector("#form-title");
 const saveButton = document.querySelector("#save-user");
 const cancelEditButton = document.querySelector("#cancel-edit");
@@ -22,6 +21,15 @@ const userStatus = document.querySelector("#user-status");
 const userList = document.querySelector("#user-list");
 const listStatus = document.querySelector("#list-status");
 const refreshButton = document.querySelector("#refresh-users");
+const usersImportFile = document.querySelector("#users-import-file");
+const importUsersButton = document.querySelector("#import-users");
+const exportUsersJsonButton = document.querySelector("#export-users-json");
+const exportUsersCsvButton = document.querySelector("#export-users-csv");
+const userTransferStatus = document.querySelector("#user-transfer-status");
+const usersImportTemplateModal = document.querySelector("#users-import-template-modal");
+const showUsersImportTemplateButton = document.querySelector("#show-users-import-template");
+const closeUsersImportTemplateButton = document.querySelector("#close-users-import-template");
+const closeUsersImportTemplateBottomButton = document.querySelector("#close-users-import-template-bottom");
 const activityFilterForm = document.querySelector("#activity-filter-form");
 const activityQuery = document.querySelector("#activity-query");
 const activityUser = document.querySelector("#activity-user");
@@ -86,7 +94,6 @@ function setStatus(element, message, isError = false) {
 function resetForm() {
   userForm.reset();
   userId.value = "";
-  colorInput.value = "#ff5d43";
   formTitle.textContent = "Nový uživatel";
   saveButton.textContent = "Vytvořit účet";
   passwordInput.required = true;
@@ -102,7 +109,6 @@ function editUser(user) {
   passwordInput.required = false;
   passwordHint.textContent = "(prázdné = beze změny)";
   roleInput.value = user.role;
-  colorInput.value = /^#[0-9a-f]{6}$/i.test(user.defaultColor) ? user.defaultColor : "#ff5d43";
   formTitle.textContent = "Upravit uživatele";
   saveButton.textContent = "Uložit změny";
   cancelEditButton.classList.remove("hidden");
@@ -121,7 +127,6 @@ function renderUsers() {
     const item = document.createElement("article");
     item.className = "user-row";
     item.innerHTML = `
-      <span class="user-color" style="background:${user.defaultColor}"></span>
       <div class="user-details">
         <strong>${escapeHtml(user.username)}</strong>
         <span>${escapeHtml(user.email)}</span>
@@ -269,10 +274,77 @@ async function resetBoard(event) {
   }
 }
 
+async function downloadAuthenticatedFile(path, fallbackFileName, statusElement) {
+  try {
+    setStatus(statusElement, "Připravuji export...");
+    const response = await fetch(path, {
+      headers: {
+        Accept: "application/octet-stream",
+        "X-Session-Token": sessionToken
+      }
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.message || "Export se nepodařilo stáhnout.");
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = fileNameMatch?.[1] || fallbackFileName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    setStatus(statusElement, "Export byl stažen.");
+  } catch (error) {
+    setStatus(statusElement, error.message, true);
+  }
+}
+
 function downloadExport(path, format) {
   const params = getActivityQuery();
   params.set("format", format);
-  window.location.href = `${path}?${params.toString()}`;
+  return downloadAuthenticatedFile(`${path}?${params.toString()}`, "nastenka-export", activityStatus);
+}
+
+function downloadUsersExport(format) {
+  return downloadAuthenticatedFile(`/api/admin/users/export?format=${encodeURIComponent(format)}`, `nastenka-uzivatele.${format}`, userTransferStatus);
+}
+
+async function importUsers() {
+  const file = usersImportFile.files?.[0];
+  if (!file) {
+    setStatus(userTransferStatus, "Nejprve vyber CSV soubor.", true);
+    return;
+  }
+
+  importUsersButton.disabled = true;
+  setStatus(userTransferStatus, "Importuji uživatele...");
+  try {
+    const payload = await apiRequest("/api/admin/users/import", {
+      method: "POST",
+      body: JSON.stringify({ csv: await file.text() })
+    });
+    const errorSummary = payload.errors?.length ? ` Chyby: ${payload.errors.join(" ")}` : "";
+    setStatus(userTransferStatus, `Vytvořeno ${payload.createdCount} účtů, přeskočeno ${payload.skippedCount}.${errorSummary}`, Boolean(payload.errors?.length));
+    usersImportFile.value = "";
+    await loadUsers();
+  } catch (error) {
+    setStatus(userTransferStatus, error.message, true);
+  } finally {
+    importUsersButton.disabled = false;
+  }
+}
+
+function closeUsersImportTemplate() {
+  usersImportTemplateModal?.classList.add("hidden");
+}
+
+function openUsersImportTemplate() {
+  usersImportTemplateModal?.classList.remove("hidden");
 }
 
 loginForm.addEventListener("submit", (event) => {
@@ -329,8 +401,7 @@ userForm.addEventListener("submit", async (event) => {
     username: usernameInput.value.trim(),
     email: emailInput.value.trim(),
     password: passwordInput.value,
-    role: roleInput.value,
-    defaultColor: colorInput.value
+    role: roleInput.value
   };
 
   try {
@@ -375,6 +446,17 @@ userList.addEventListener("click", async (event) => {
 
 cancelEditButton.addEventListener("click", resetForm);
 refreshButton.addEventListener("click", loadUsers);
+importUsersButton.addEventListener("click", importUsers);
+showUsersImportTemplateButton.addEventListener("click", openUsersImportTemplate);
+closeUsersImportTemplateButton.addEventListener("click", closeUsersImportTemplate);
+closeUsersImportTemplateBottomButton.addEventListener("click", closeUsersImportTemplate);
+usersImportTemplateModal.addEventListener("click", (event) => {
+  if (event.target === usersImportTemplateModal) {
+    closeUsersImportTemplate();
+  }
+});
+exportUsersJsonButton.addEventListener("click", () => downloadUsersExport("json"));
+exportUsersCsvButton.addEventListener("click", () => downloadUsersExport("csv"));
 activityFilterForm.addEventListener("submit", (event) => {
   event.preventDefault();
   loadActivity();
@@ -396,6 +478,11 @@ selectAllActivity.addEventListener("change", () => {
 });
 deleteSelectedActivityButton.addEventListener("click", deleteSelectedActivity);
 boardResetForm.addEventListener("submit", resetBoard);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeUsersImportTemplate();
+  }
+});
 document.querySelector("#export-activity-json").addEventListener("click", () => downloadExport("/api/admin/activity/export", "json"));
 document.querySelector("#export-activity-csv").addEventListener("click", () => downloadExport("/api/admin/activity/export", "csv"));
 document.querySelector("#export-snapshots-json").addEventListener("click", () => downloadExport("/api/admin/snapshots/export", "json"));
