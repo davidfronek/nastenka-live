@@ -13,6 +13,7 @@ const {
   saveUsers: saveUsersToFirestore,
   saveSnapshot: saveSnapshotToFirestore,
   deleteSnapshots: deleteSnapshotsFromFirestore,
+  clearBoardData: clearBoardDataFromFirestore,
   saveActivityRun: saveActivityRunToFirestore
 } = require("./firestore-storage");
 
@@ -70,6 +71,7 @@ const SELF_REGISTRATION_ENABLED = false;
 const GUEST_LOGIN_ENABLED = true;
 const SESSION_TOKEN_BYTES = 24;
 const DISCONNECT_LOG_DELAY_MS = 3000;
+const BOARD_RESET_CONFIRMATION = "RESET";
 
 function nowTime() {
   return new Date().toLocaleTimeString("cs-CZ", {
@@ -1043,6 +1045,41 @@ function saveRegisteredUsers(users) {
   ensureSnapshotStorage();
   fs.writeFileSync(usersFilePath, `${JSON.stringify(users, null, 2)}\n`, "utf-8");
   return Promise.resolve();
+}
+
+async function clearBoardData() {
+  notes.length = 0;
+  boardTexts.length = 0;
+  noteConnections.length = 0;
+  activity.length = 0;
+  activityRuns.length = 0;
+  textResizeActivityByUser.clear();
+  noteResizeActivityByUser.clear();
+  firestoreSnapshots = [];
+  lastAutomaticSnapshotSignature = getBoardStateSignature();
+
+  if (isFirestoreEnabled()) {
+    const result = await clearBoardDataFromFirestore();
+    return { ...result, mode: "firestore" };
+  }
+
+  let deletedCount = 0;
+  listSnapshotFilePaths().forEach((filePath) => {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      deletedCount += 1;
+    }
+  });
+  if (fs.existsSync(legacySnapshotFilePath)) {
+    fs.unlinkSync(legacySnapshotFilePath);
+    deletedCount += 1;
+  }
+  if (fs.existsSync(activityDir)) {
+    fs.rmSync(activityDir, { recursive: true, force: true });
+    deletedCount += 1;
+  }
+
+  return { deletedCount, mode: "local" };
 }
 
 function getBoardStateSignature() {
@@ -2287,6 +2324,45 @@ app.delete("/api/admin/users/:id", async (req, res) => {
     res.json({ ok: true });
   } catch {
     res.status(500).json({ ok: false, message: "Odstranění uživatele se nepodařilo." });
+  }
+});
+
+app.post("/api/admin/reset-board", async (req, res) => {
+  const adminUser = requireAdmin(req, res);
+  if (!adminUser) {
+    return;
+  }
+
+  const password = sanitizePassword(req.body?.password);
+  const confirmation = String(req.body?.confirmation || "").trim();
+  if (!password) {
+    res.status(400).json({ ok: false, message: "Zadej své aktuální heslo." });
+    return;
+  }
+  if (confirmation !== BOARD_RESET_CONFIRMATION) {
+    res.status(400).json({ ok: false, message: `Pro potvrzení napiš přesně ${BOARD_RESET_CONFIRMATION}.` });
+    return;
+  }
+
+  const users = readRegisteredUsers();
+  const registeredAdmin = users.find((item) => sanitizeEmail(item.email) === sanitizeEmail(adminUser.email));
+  if (!registeredAdmin || !isAdmin(registeredAdmin) || !verifyPassword(password, registeredAdmin.passwordHash)) {
+    res.status(403).json({ ok: false, message: "Aktuální heslo není správné." });
+    return;
+  }
+
+  try {
+    const result = await clearBoardData();
+    io.emit("board:init", {
+      notes,
+      texts: boardTexts,
+      connections: noteConnections,
+      activity
+    });
+    io.emit("activity:list", activity);
+    res.json({ ok: true, ...result, message: "Nástěnka a její data byly kompletně vymazány. Uživatelé zůstali zachováni." });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: `Reset nástěnky se nepodařil: ${error.message}` });
   }
 });
 

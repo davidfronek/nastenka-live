@@ -112,6 +112,27 @@ async function deleteSnapshots(ids) {
   }
 }
 
+async function clearBoardData() {
+  const db = assertEnabled();
+  const collections = [
+    db.collection("nastenka/snapshots/items"),
+    db.collection("nastenka/activity/runs")
+  ];
+  let deletedCount = 0;
+
+  for (const collection of collections) {
+    const snapshot = await collection.get();
+    for (let index = 0; index < snapshot.docs.length; index += 500) {
+      const batch = db.batch();
+      snapshot.docs.slice(index, index + 500).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+      deletedCount += Math.min(500, snapshot.docs.length - index);
+    }
+  }
+
+  return { deletedCount };
+}
+
 async function saveActivityRun(run) {
   const db = assertEnabled();
   await db.collection("nastenka/activity/runs").doc(String(run.id)).set(run);
@@ -125,5 +146,6 @@ module.exports = {
   saveUsers,
   saveSnapshot,
   deleteSnapshots,
+  clearBoardData,
   saveActivityRun
 };

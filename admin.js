@@ -32,6 +32,11 @@ const activityStatus = document.querySelector("#activity-status");
 const activityResults = document.querySelector("#activity-results");
 const selectAllActivity = document.querySelector("#select-all-activity");
 const deleteSelectedActivityButton = document.querySelector("#delete-selected-activity");
+const boardResetForm = document.querySelector("#board-reset-form");
+const boardResetPassword = document.querySelector("#board-reset-password");
+const boardResetConfirmation = document.querySelector("#board-reset-confirmation");
+const boardResetSubmit = document.querySelector("#board-reset-submit");
+const boardResetStatus = document.querySelector("#board-reset-status");
 
 let currentUser = null;
 let sessionToken = "";
@@ -234,6 +239,36 @@ async function deleteSelectedActivity() {
   }
 }
 
+async function resetBoard(event) {
+  event.preventDefault();
+  if (boardResetConfirmation.value.trim() !== "RESET") {
+    setStatus(boardResetStatus, "Pro potvrzení napiš přesně RESET.", true);
+    return;
+  }
+  if (!window.confirm("Opravdu nenávratně vymazat celou nástěnku a její historii? Uživatelské účty zůstanou zachované.")) {
+    return;
+  }
+
+  boardResetSubmit.disabled = true;
+  setStatus(boardResetStatus, "Mažu data nástěnky...");
+  try {
+    const payload = await apiRequest("/api/admin/reset-board", {
+      method: "POST",
+      body: JSON.stringify({
+        password: boardResetPassword.value,
+        confirmation: boardResetConfirmation.value.trim()
+      })
+    });
+    boardResetForm.reset();
+    await loadActivity();
+    setStatus(boardResetStatus, payload.message || "Nástěnka byla vymazána.");
+  } catch (error) {
+    setStatus(boardResetStatus, error.message, true);
+  } finally {
+    boardResetSubmit.disabled = false;
+  }
+}
+
 function downloadExport(path, format) {
   const params = getActivityQuery();
   params.set("format", format);
@@ -360,6 +395,7 @@ selectAllActivity.addEventListener("change", () => {
   updateActivitySelectionState();
 });
 deleteSelectedActivityButton.addEventListener("click", deleteSelectedActivity);
+boardResetForm.addEventListener("submit", resetBoard);
 document.querySelector("#export-activity-json").addEventListener("click", () => downloadExport("/api/admin/activity/export", "json"));
 document.querySelector("#export-activity-csv").addEventListener("click", () => downloadExport("/api/admin/activity/export", "csv"));
 document.querySelector("#export-snapshots-json").addEventListener("click", () => downloadExport("/api/admin/snapshots/export", "json"));

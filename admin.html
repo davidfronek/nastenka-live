@@ -107,6 +107,22 @@
           <p id="activity-status" class="status" role="alert"></p>
           <div id="activity-results" class="activity-results"></div>
         </section>
+
+        <section class="reset-panel" aria-labelledby="reset-title">
+          <div class="list-heading">
+            <div>
+              <div class="eyebrow">NEVRATNÁ OPERACE</div>
+              <h2 id="reset-title">Kompletní reset nástěnky</h2>
+              <p class="panel-description">Smaže všechny tickety, texty, spojnice, snapshoty a záznamy aktivity. Uživatelské účty zůstanou zachované.</p>
+            </div>
+          </div>
+          <form id="board-reset-form" class="reset-form">
+            <label>Aktuální heslo administrátora<input id="board-reset-password" type="password" autocomplete="current-password" required /></label>
+            <label>Napiš <strong>RESET</strong> pro potvrzení<input id="board-reset-confirmation" type="text" autocomplete="off" spellcheck="false" required /></label>
+            <button id="board-reset-submit" class="danger-button reset-submit" type="submit">Vymazat celou nástěnku</button>
+          </form>
+          <p id="board-reset-status" class="status" role="alert"></p>
+        </section>
       </section>
     </main>
     <script src="/socket.io/socket.io.js"></script>
