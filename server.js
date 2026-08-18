@@ -412,7 +412,7 @@ function filterActivityEntries(entries, query) {
 }
 
 function canManageNote(_user, _note) {
-  return isAdmin(_user) || Boolean(_user?.name && _note?.from === _user.name);
+  return Boolean(_user && !isGuest(_user));
 }
 
 function canDeleteNote(user, note) {
@@ -1151,7 +1151,7 @@ function getBoardStateSignature() {
   return JSON.stringify({ notes, texts: boardTexts, connections: noteConnections });
 }
 
-function saveBoardSnapshot(savedBy, kind = "manual") {
+async function saveBoardSnapshot(savedBy, kind = "manual") {
   const snapshot = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
@@ -1205,15 +1205,15 @@ function saveBoardSnapshot(savedBy, kind = "manual") {
 
   const dailySnapshotFilePath = getSnapshotFilePath();
   if (isFirestoreEnabled()) {
+    await saveSnapshotToFirestore(snapshot);
     firestoreSnapshots.unshift(snapshot);
     firestoreSnapshots.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
     const removedSnapshots = firestoreSnapshots.splice(SNAPSHOT_LIMIT);
-    saveSnapshotToFirestore(snapshot).catch((error) => {
-      console.error(`Uložení snapshotu do Firestore selhalo: ${error.message}`);
-    });
-    deleteSnapshotsFromFirestore(removedSnapshots.map((item) => item.id)).catch((error) => {
+    try {
+      await deleteSnapshotsFromFirestore(removedSnapshots.map((item) => item.id));
+    } catch (error) {
       console.error(`Mazání starších snapshotů z Firestore selhalo: ${error.message}`);
-    });
+    }
     return snapshot;
   }
 
@@ -1226,21 +1226,34 @@ function saveBoardSnapshot(savedBy, kind = "manual") {
   listSnapshotFilePaths().forEach((filePath) => {
     fs.writeFileSync(filePath, "[]\n", "utf-8");
   });
-  const snapshotsForToday = allSnapshots.filter((item) => (
-    String(item.createdAt || "").slice(0, 10) === formatSnapshotDate()
-  ));
-  fs.writeFileSync(dailySnapshotFilePath, `${JSON.stringify(snapshotsForToday, null, 2)}\n`, "utf-8");
+  const snapshotsByFile = new Map();
+  allSnapshots.forEach((item) => {
+    const filePath = getSnapshotFilePath(new Date(item.createdAt));
+    const snapshots = snapshotsByFile.get(filePath) || [];
+    snapshots.push(item);
+    snapshotsByFile.set(filePath, snapshots);
+  });
+  snapshotsByFile.forEach((snapshots, filePath) => {
+    fs.writeFileSync(filePath, `${JSON.stringify(snapshots, null, 2)}\n`, "utf-8");
+  });
+  if (!snapshotsByFile.has(dailySnapshotFilePath)) {
+    ensureSnapshotFile(dailySnapshotFilePath);
+  }
   return snapshot;
 }
 
-function saveAutomaticSnapshotIfChanged() {
+async function saveAutomaticSnapshotIfChanged() {
   const signature = getBoardStateSignature();
   if (signature === lastAutomaticSnapshotSignature) {
     return;
   }
 
-  saveBoardSnapshot("Automatický systém", "automatic");
-  lastAutomaticSnapshotSignature = signature;
+  try {
+    await saveBoardSnapshot("Automatický systém", "automatic");
+    lastAutomaticSnapshotSignature = signature;
+  } catch (error) {
+    console.error(`Uložení automatického snapshotu selhalo: ${error.message}`);
+  }
 }
 
 function trimStoredSnapshots() {
@@ -1791,7 +1804,7 @@ io.on("connection", (socket) => {
     }
 
     if (!canManageNote(user, note)) {
-      ack?.({ ok: false, message: "Velikost tohoto ticketu může změnit jen jeho autor nebo admin." });
+      ack?.({ ok: false, message: "Velikost tohoto ticketu může změnit jen přihlášený uživatel." });
       return;
     }
 
@@ -1944,7 +1957,7 @@ io.on("connection", (socket) => {
     }
 
     if (!canManageNote(user, note)) {
-      ack?.({ ok: false, message: "Tento ticket může upravit jen jeho autor nebo admin." });
+      ack?.({ ok: false, message: "Tento ticket může upravit jen přihlášený uživatel." });
       return;
     }
 
@@ -1997,7 +2010,7 @@ io.on("connection", (socket) => {
     }
 
     if (!canDeleteNote(user, note)) {
-      ack?.({ ok: false, message: "Tento aktivní ticket může smazat jen jeho autor nebo admin." });
+      ack?.({ ok: false, message: "Tento aktivní ticket může smazat jen přihlášený uživatel." });
       return;
     }
 
@@ -2132,21 +2145,26 @@ io.on("connection", (socket) => {
     ack?.({ ok: true, removedCount });
   });
 
-  socket.on("session:saveSnapshot", () => {
+  socket.on("session:saveSnapshot", async () => {
     const user = usersBySocket.get(socket.id);
     if (!user) {
       socket.emit("session:error", "Nejdříve se přihlas.");
       return;
     }
 
-    const snapshot = saveBoardSnapshot(user.name);
-    lastAutomaticSnapshotSignature = getBoardStateSignature();
-    socket.emit("session:saved", {
-      id: snapshot.id,
-      createdAt: snapshot.createdAt,
-      noteCount: snapshot.noteCount
-    });
-    addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
+    try {
+      const snapshot = await saveBoardSnapshot(user.name);
+      lastAutomaticSnapshotSignature = getBoardStateSignature();
+      socket.emit("session:saved", {
+        id: snapshot.id,
+        createdAt: snapshot.createdAt,
+        noteCount: snapshot.noteCount
+      });
+      addActivity(`${user.name} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
+    } catch (error) {
+      console.error(`Uložení snapshotu selhalo: ${error.message}`);
+      socket.emit("session:error", "Snapshot se nepodařilo uložit.");
+    }
   });
 
   socket.on("snapshot:restore", ({ id }, ack) => {
@@ -2206,20 +2224,25 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/snapshots/save", (req, res) => {
+app.post("/api/snapshots/save", async (req, res) => {
   const sessionUser = requireWritableRequestUser(req, res);
   if (!sessionUser) {
     return;
   }
   const savedBy = sanitizeUser(req.body?.savedBy) || "Neznámý uživatel";
-  const snapshot = saveBoardSnapshot(savedBy);
-  addActivity(`${savedBy} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
-  res.json({
-    ok: true,
-    id: snapshot.id,
-    createdAt: snapshot.createdAt,
-    noteCount: snapshot.noteCount
-  });
+  try {
+    const snapshot = await saveBoardSnapshot(savedBy);
+    addActivity(`${savedBy} uložil/a snapshot (${snapshot.noteCount} ticketů, ${snapshot.textCount} textů)`);
+    res.json({
+      ok: true,
+      id: snapshot.id,
+      createdAt: snapshot.createdAt,
+      noteCount: snapshot.noteCount
+    });
+  } catch (error) {
+    console.error(`Uložení snapshotu selhalo: ${error.message}`);
+    res.status(500).json({ ok: false, message: "Snapshot se nepodařilo uložit." });
+  }
 });
 
 app.get("/api/users", (_req, res) => {

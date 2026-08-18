@@ -1950,7 +1950,7 @@ function isAssignedToMe(_note) {
 }
 
 function canEditNote(note) {
-  return Boolean(me?.role !== "guest" && isMyNote(note));
+  return Boolean(me && me.role !== "guest" && note);
 }
 
 function canToggleNote(_note) {
@@ -1966,11 +1966,11 @@ function getSelectedMovableNotes() {
 }
 
 function getSelectedOwnedNotes() {
-  return notes.filter((note) => selectedNoteIds.has(note.id) && isActiveNote(note) && isMyNote(note));
+  return notes.filter((note) => selectedNoteIds.has(note.id) && isActiveNote(note) && canEditNote(note));
 }
 
 function getSelectedDeletableNotes() {
-  return notes.filter((note) => selectedNoteIds.has(note.id) && (getNoteStatus(note) === "done" || (isActiveNote(note) && isMyNote(note))));
+  return notes.filter((note) => selectedNoteIds.has(note.id) && (getNoteStatus(note) === "done" || (isActiveNote(note) && canEditNote(note))));
 }
 
 function closeSelectionContextMenu() {
@@ -1986,8 +1986,8 @@ function openSelectionContextMenu(event) {
 
   event.preventDefault();
   selectionContextSummary.textContent = ownedNotes.length === 0
-    ? "Ve výběru nemáš vlastní ticket."
-    : `Vlastní tickety ve výběru: ${ownedNotes.length}`;
+    ? "Ve výběru není aktivní ticket."
+    : `Aktivní tickety ve výběru: ${ownedNotes.length}`;
   selectionContextEdit.disabled = ownedNotes.length !== 1;
   selectionContextDone.disabled = ownedNotes.length === 0;
   selectionContextDelete.disabled = deletableNotes.length === 0;
@@ -3666,7 +3666,7 @@ notePreviewEditForm?.addEventListener("submit", (event) => {
   }
 
   if (!canEditNote(note)) {
-    setPreviewEditStatus("Tento ticket může upravit jen autor nebo admin.", true);
+    setPreviewEditStatus("Tento ticket může upravit jen přihlášený uživatel.", true);
     return;
   }
 
