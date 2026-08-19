@@ -56,13 +56,15 @@ async function initializeFirestoreStorage() {
 
   const [usersSnapshot, snapshotsSnapshot, activityRunsSnapshot] = await Promise.all([
     db.collection("nastenka/config/users").get(),
-    db.collection("nastenka/snapshots/items").orderBy("createdAt", "desc").get(),
+    db.collection("nastenka/snapshots/items").get(),
     db.collection("nastenka/activity/runs").orderBy("startedAt", "desc").get()
   ]);
 
   return {
     users: usersSnapshot.docs.map((item) => item.data()),
-    snapshots: snapshotsSnapshot.docs.map((item) => item.data()),
+    snapshots: snapshotsSnapshot.docs.map((item) => item.data()).sort((a, b) => (
+      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    )),
     activityRuns: activityRunsSnapshot.docs.map((item) => item.data())
   };
 }

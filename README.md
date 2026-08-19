@@ -35,7 +35,7 @@ Pro simulaci vice uzivatelu otevri stejnou adresu ve vice oknech nebo ruznych pr
 - Tlacitko "Ulozit snapshot nyni" ulozi rucni snapshot.
 - Tlacitko "Obnovit posledni snapshot" obnovi nejmladsi ulozenou zalohu.
 - Server uklada automaticky snapshot zmenene plochy jednou za 5 minut; navigace nebo zavreni zalozky uz nevytvari duplicitni snapshot.
-- Uchovavaji se pouze posledni 3 snapshoty. Pri startu se starsi historicke zaznamy automaticky odstrani.
+- Uchovava se nejvyse 30 snapshotu. Starsi snapshot se odstrani pouze po ulozeni noveho snapshotu, nikdy jen pri startu serveru bez nove zmeny.
 - Ulozene zaznamy jsou v dennim souboru `data/board-snapshots-YYYY-MM-DD.json`.
 - Pri startu serveru se automaticky obnovi posledni dostupny snapshot.
 - Snapshot obsahuje tickety, textove prvky, spojnice, formatovani, pozice, rozmery a metadata.

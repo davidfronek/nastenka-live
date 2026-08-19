@@ -124,7 +124,7 @@ Panel **Zálohy** nabízí:
 - **Uložit snapshot nyní**: uloží aktuální stav plochy.
 - **Obnovit poslední snapshot**: načte nejnovější uložený stav.
 
-Server ukládá změněnou plochu automaticky jednou za pět minut a uchovává tři nejnovější snapshoty. Snapshot obsahuje aktivní i vyřešené tickety, textové prvky, spojnice, pozice, rozměry, formátování a metadata.
+Server ukládá změněnou plochu automaticky jednou za pět minut a uchovává nejvýše 30 nejnovějších snapshotů. Starší snapshot se odstraní pouze po uložení nového snapshotu, nikoli při startu serveru bez nové změny. Snapshot obsahuje aktivní i vyřešené tickety, textové prvky, spojnice, pozice, rozměry, formátování a metadata.
 
 Obnova nahradí aktuální stav plochy. Použijte ji proto pouze tehdy, když chcete obnovit uloženou verzi.
 

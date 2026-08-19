@@ -46,7 +46,7 @@ const usersFilePath = path.join(dataDir, "users.json");
 let firestoreUsers = null;
 let firestoreSnapshots = [];
 const ACTIVITY_LIMIT = 30;
-const SNAPSHOT_LIMIT = 3;
+const SNAPSHOT_LIMIT = 30;
 const AUTOMATIC_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 let lastAutomaticSnapshotSignature = "";
 const DONE_STACK_X = 2400;
@@ -1035,6 +1035,15 @@ async function refreshActivityRuns() {
   activity.splice(0, activity.length, ...(latestRuns.find((run) => run.id === activityRunId)?.entries || []));
 }
 
+function emitBoardState(socket) {
+  socket.emit("board:init", {
+    notes,
+    texts: boardTexts,
+    connections: noteConnections,
+    activity
+  });
+}
+
 async function deleteActivityEntries(entries) {
   const selected = new Set(entries.map((entry) => `${String(entry.runId)}:${String(entry.id)}`));
   let deletedCount = 0;
@@ -1256,29 +1265,6 @@ async function saveAutomaticSnapshotIfChanged() {
   }
 }
 
-function trimStoredSnapshots() {
-  if (isFirestoreEnabled()) {
-    firestoreSnapshots.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-    const removedSnapshots = firestoreSnapshots.splice(SNAPSHOT_LIMIT);
-    deleteSnapshotsFromFirestore(removedSnapshots.map((item) => item.id)).catch((error) => {
-      console.error(`Mazání starších snapshotů z Firestore selhalo: ${error.message}`);
-    });
-    return;
-  }
-
-  const snapshots = listSnapshotFilePaths()
-    .flatMap((filePath) => readSnapshots(filePath))
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
-    .slice(0, SNAPSHOT_LIMIT);
-  listSnapshotFilePaths().forEach((filePath) => fs.writeFileSync(filePath, "[]\n", "utf-8"));
-  snapshots.forEach((snapshot) => {
-    const filePath = getSnapshotFilePath(new Date(snapshot.createdAt));
-    const current = readSnapshots(filePath);
-    current.push(snapshot);
-    fs.writeFileSync(filePath, `${JSON.stringify(current, null, 2)}\n`, "utf-8");
-  });
-}
-
 function restoreBoardFromLatestSnapshot() {
   const latestSnapshot = readLatestSnapshot();
   if (!latestSnapshot) {
@@ -1387,13 +1373,6 @@ io.on("connection", (socket) => {
     next();
   });
 
-  socket.emit("board:init", {
-    notes,
-    texts: boardTexts,
-    connections: noteConnections,
-    activity
-  });
-
   socket.on("auth:register", ({ username, email, password }) => {
     if (!SELF_REGISTRATION_ENABLED) {
       socket.emit("auth:error", "Registrace je vypnutá. Požádej administrátora o vytvoření účtu.");
@@ -1462,6 +1441,7 @@ io.on("connection", (socket) => {
     }
 
     socket.emit("auth:ok", user);
+    emitBoardState(socket);
 
     emitUsers();
     addActivity(`${user.name} dokončil/a registraci a připojil/a se do nástěnky (online: ${getOnlineUserCount()})`);
@@ -1507,6 +1487,7 @@ io.on("connection", (socket) => {
     }
 
     socket.emit("auth:ok", user);
+    emitBoardState(socket);
 
     emitUsers();
     addActivity(`${user.name} se připojil/a do nástěnky (online: ${getOnlineUserCount()})`);
@@ -1534,6 +1515,7 @@ io.on("connection", (socket) => {
     }
 
     socket.emit("auth:ok", user);
+    emitBoardState(socket);
 
     emitUsers();
     addActivity(`${user.name} vstoupil/a do nástěnky jako host (online: ${getOnlineUserCount()})`);
@@ -1547,6 +1529,7 @@ io.on("connection", (socket) => {
     }
 
     socket.emit("auth:ok", user);
+    emitBoardState(socket);
     emitUsers();
   });
 
@@ -2741,13 +2724,8 @@ async function startServer() {
     firestoreSnapshots = remoteStorage.snapshots.sort((a, b) => (
       String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
     ));
-    trimStoredSnapshots();
     activityRuns.push(...(remoteStorage.activityRuns || []));
     console.log(`Používá se Firestore (${firestoreSnapshots.length} snapshotů, ${firestoreUsers.length} uživatelů).`);
-  }
-
-  if (!isFirestoreEnabled()) {
-    trimStoredSnapshots();
   }
 
   const restoredActivity = readLatestActivityEntries();
