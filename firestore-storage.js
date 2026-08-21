@@ -37,6 +37,7 @@ function getFirestore() {
   }
 
   firestore = getFirestoreClient();
+  firestore.settings({ ignoreUndefinedProperties: true });
   return firestore;
 }
 
