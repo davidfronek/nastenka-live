@@ -416,11 +416,16 @@ body {
 }
 
 .guest-mode .tool-dock {
-  display: none;
+  display: block;
 }
 
 .guest-mode .workspace {
-  grid-template-columns: 1fr;
+  grid-template-columns: 80px 1fr;
+}
+
+.guest-mode .dock-rail > :not(#logout-btn):not(#manual-link),
+.guest-mode .tool-dock-panel {
+  display: none;
 }
 
 .guest-mode .board-quick-create,
