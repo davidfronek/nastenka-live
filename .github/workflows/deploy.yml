@@ -1,0 +1,48 @@
+name: Deploy Nastenka Live
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-nastenka-live-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -Eeuo pipefail
+
+            HELPER_SOURCE="$(mktemp)"
+            trap 'rm -f "$HELPER_SOURCE"' EXIT
+            curl --fail --silent --show-error --location \
+              https://raw.githubusercontent.com/davidfronek/vps-dashboard/main/scripts/domain-admin.sh \
+              --output "$HELPER_SOURCE"
+            install -o root -g root -m 0755 "$HELPER_SOURCE" /usr/local/sbin/vps-dashboard-domains
+
+            /usr/local/sbin/vps-dashboard-domains domain-deploy \
+              nastenka-live.onremote.cz \
+              https://github.com/davidfronek/nastenka-live.git \
+              main \
+              3099 \
+              1 \
+              0 \
+              1
+
+            systemctl is-active --quiet vps-app-nastenka-live-onremote-cz
+            curl --fail --silent --show-error --retry 5 --retry-delay 2 \
+              http://127.0.0.1:3099/health
