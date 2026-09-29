@@ -142,8 +142,8 @@ async function saveActivityRun(run) {
 }
 
 module.exports = {
-  isFirestoreEnabled,
-  initializeFirestoreStorage,
+  label: "Firestore",
+  initializeStorage: initializeFirestoreStorage,
   loadActivityRuns,
   loadUsers,
   saveUsers,

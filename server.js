@@ -5,17 +5,16 @@ require("dotenv").config();
 const express = require("express");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
-const {
-  isFirestoreEnabled,
-  initializeFirestoreStorage,
-  loadActivityRuns: loadActivityRunsFromFirestore,
-  loadUsers: loadUsersFromFirestore,
-  saveUsers: saveUsersToFirestore,
-  saveSnapshot: saveSnapshotToFirestore,
-  deleteSnapshots: deleteSnapshotsFromFirestore,
-  clearBoardData: clearBoardDataFromFirestore,
-  saveActivityRun: saveActivityRunToFirestore
-} = require("./firestore-storage");
+const storageProvider = String(process.env.STORAGE_PROVIDER || "local").trim().toLowerCase();
+const remoteStorage = storageProvider === "postgres"
+  ? require("./postgres-storage")
+  : storageProvider === "firestore"
+    ? require("./firestore-storage")
+    : null;
+
+function isRemoteStorageEnabled() {
+  return Boolean(remoteStorage);
+}
 
 const app = express();
 const server = createServer(app);
@@ -38,13 +37,13 @@ const noteResizeActivityByUser = new Map();
 const activity = [];
 const activityRuns = [];
 const activityRunId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const activityRunStartedAt = nowLocalTimestamp();
+const activityRunStartedAt = new Date().toISOString();
 const dataDir = path.join(__dirname, "data");
 const activityDir = path.join(dataDir, "activity");
 const legacySnapshotFilePath = path.join(dataDir, "board-snapshots.json");
 const usersFilePath = path.join(dataDir, "users.json");
-let firestoreUsers = null;
-let firestoreSnapshots = [];
+let remoteUsers = null;
+let remoteSnapshots = [];
 const ACTIVITY_LIMIT = 30;
 const SNAPSHOT_LIMIT = 30;
 const AUTOMATIC_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
@@ -774,8 +773,8 @@ function listActivityFilePaths() {
 }
 
 function listSnapshotFilePaths() {
-  if (isFirestoreEnabled()) {
-    return Array.from(new Set(firestoreSnapshots.map((snapshot) => (
+  if (isRemoteStorageEnabled()) {
+    return Array.from(new Set(remoteSnapshots.map((snapshot) => (
       `board-snapshots-${String(snapshot.createdAt || "").slice(0, 10)}.json`
     )))).map((fileName) => path.join(dataDir, fileName));
   }
@@ -811,9 +810,9 @@ function ensureSnapshotStorage() {
 }
 
 function readSnapshots(filePath = getSnapshotFilePath()) {
-  if (isFirestoreEnabled()) {
+  if (isRemoteStorageEnabled()) {
     const fileName = path.basename(filePath);
-    return firestoreSnapshots.filter((snapshot) => (
+    return remoteSnapshots.filter((snapshot) => (
       `board-snapshots-${String(snapshot.createdAt || "").slice(0, 10)}.json` === fileName
     ));
   }
@@ -830,8 +829,8 @@ function readSnapshots(filePath = getSnapshotFilePath()) {
 }
 
 function readLatestSnapshot() {
-  if (isFirestoreEnabled()) {
-    return firestoreSnapshots[0] || null;
+  if (isRemoteStorageEnabled()) {
+    return remoteSnapshots[0] || null;
   }
 
   const files = listSnapshotFilePaths();
@@ -967,7 +966,7 @@ function restoreBoardFromSnapshot(snapshot) {
 }
 
 function readActivityEntries(filePath = getActivityFilePath()) {
-  if (isFirestoreEnabled()) {
+  if (isRemoteStorageEnabled()) {
     return activityRuns.flatMap((run) => Array.isArray(run.entries) ? run.entries : []);
   }
 
@@ -987,7 +986,7 @@ function readLatestActivityEntries() {
 }
 
 function saveActivityLog() {
-  if (isFirestoreEnabled()) {
+  if (isRemoteStorageEnabled()) {
     const run = {
       id: activityRunId,
       startedAt: activityRunStartedAt,
@@ -1000,8 +999,8 @@ function saveActivityLog() {
     } else {
       activityRuns[existingRunIndex] = run;
     }
-    saveActivityRunToFirestore(run).catch((error) => {
-      console.error(`Uložení aktivity do Firestore selhalo: ${error.message}`);
+    remoteStorage.saveActivityRun(run).catch((error) => {
+      console.error(`Uložení aktivity do ${remoteStorage.label} selhalo: ${error.message}`);
     });
     return;
   }
@@ -1011,7 +1010,7 @@ function saveActivityLog() {
 }
 
 function getActivityEntriesForAnalysis() {
-  if (isFirestoreEnabled()) {
+  if (isRemoteStorageEnabled()) {
     return activityRuns.flatMap((run) => (Array.isArray(run.entries) ? run.entries : []).map((entry) => ({
       ...entry,
       runId: run.id,
@@ -1026,11 +1025,11 @@ function getActivityEntriesForAnalysis() {
 }
 
 async function refreshActivityRuns() {
-  if (!isFirestoreEnabled()) {
+  if (!isRemoteStorageEnabled()) {
     return;
   }
 
-  const latestRuns = await loadActivityRunsFromFirestore();
+  const latestRuns = await remoteStorage.loadActivityRuns();
   activityRuns.splice(0, activityRuns.length, ...latestRuns);
   activity.splice(0, activity.length, ...(latestRuns.find((run) => run.id === activityRunId)?.entries || []));
 }
@@ -1048,7 +1047,7 @@ async function deleteActivityEntries(entries) {
   const selected = new Set(entries.map((entry) => `${String(entry.runId)}:${String(entry.id)}`));
   let deletedCount = 0;
 
-  if (isFirestoreEnabled()) {
+  if (isRemoteStorageEnabled()) {
     const runsToSave = [];
     activityRuns.forEach((run) => {
       const keptEntries = (Array.isArray(run.entries) ? run.entries : []).filter((entry) => {
@@ -1062,8 +1061,8 @@ async function deleteActivityEntries(entries) {
 
       if (keptEntries.length !== (run.entries || []).length) {
         run.entries = keptEntries;
-        run.updatedAt = nowLocalTimestamp();
-        runsToSave.push(saveActivityRunToFirestore(run));
+        run.updatedAt = new Date().toISOString();
+        runsToSave.push(remoteStorage.saveActivityRun(run));
       }
     });
 
@@ -1093,8 +1092,8 @@ async function deleteActivityEntries(entries) {
 }
 
 function readRegisteredUsers() {
-  if (isFirestoreEnabled()) {
-    return firestoreUsers || [];
+  if (isRemoteStorageEnabled()) {
+    return remoteUsers || [];
   }
 
   ensureSnapshotStorage();
@@ -1108,10 +1107,10 @@ function readRegisteredUsers() {
 }
 
 function saveRegisteredUsers(users) {
-  if (isFirestoreEnabled()) {
-    firestoreUsers = users;
-    return saveUsersToFirestore(users).catch((error) => {
-      console.error(`Uložení uživatelů do Firestore selhalo: ${error.message}`);
+  if (isRemoteStorageEnabled()) {
+    remoteUsers = users;
+    return remoteStorage.saveUsers(users).catch((error) => {
+      console.error(`Uložení uživatelů do ${remoteStorage.label} selhalo: ${error.message}`);
       throw error;
     });
   }
@@ -1129,12 +1128,12 @@ async function clearBoardData() {
   activityRuns.length = 0;
   textResizeActivityByUser.clear();
   noteResizeActivityByUser.clear();
-  firestoreSnapshots = [];
+  remoteSnapshots = [];
   lastAutomaticSnapshotSignature = getBoardStateSignature();
 
-  if (isFirestoreEnabled()) {
-    const result = await clearBoardDataFromFirestore();
-    return { ...result, mode: "firestore" };
+  if (isRemoteStorageEnabled()) {
+    const result = await remoteStorage.clearBoardData();
+    return { ...result, mode: storageProvider };
   }
 
   let deletedCount = 0;
@@ -1213,15 +1212,15 @@ async function saveBoardSnapshot(savedBy, kind = "manual") {
   };
 
   const dailySnapshotFilePath = getSnapshotFilePath();
-  if (isFirestoreEnabled()) {
-    await saveSnapshotToFirestore(snapshot);
-    firestoreSnapshots.unshift(snapshot);
-    firestoreSnapshots.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-    const removedSnapshots = firestoreSnapshots.splice(SNAPSHOT_LIMIT);
+  if (isRemoteStorageEnabled()) {
+    await remoteStorage.saveSnapshot(snapshot);
+    remoteSnapshots.unshift(snapshot);
+    remoteSnapshots.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const removedSnapshots = remoteSnapshots.splice(SNAPSHOT_LIMIT);
     try {
-      await deleteSnapshotsFromFirestore(removedSnapshots.map((item) => item.id));
+      await remoteStorage.deleteSnapshots(removedSnapshots.map((item) => item.id));
     } catch (error) {
-      console.error(`Mazání starších snapshotů z Firestore selhalo: ${error.message}`);
+      console.error(`Mazání starších snapshotů z ${remoteStorage.label} selhalo: ${error.message}`);
     }
     return snapshot;
   }
@@ -1457,12 +1456,12 @@ io.on("connection", (socket) => {
     }
 
     let users = readRegisteredUsers();
-    if (isFirestoreEnabled()) {
+    if (isRemoteStorageEnabled()) {
       try {
-        users = await loadUsersFromFirestore();
-        firestoreUsers = users;
+        users = await remoteStorage.loadUsers();
+        remoteUsers = users;
       } catch (error) {
-        console.error(`Načtení uživatelů z Firestore při přihlášení selhalo: ${error.message}`);
+        console.error(`Načtení uživatelů z ${remoteStorage.label} při přihlášení selhalo: ${error.message}`);
       }
     }
     const registeredUser = users.find((item) => sanitizeEmail(item.email) === cleanEmail);
@@ -2718,14 +2717,14 @@ app.get("/api/snapshots", (_req, res) => {
 async function startServer() {
   ensureSnapshotStorage();
 
-  if (isFirestoreEnabled()) {
-    const remoteStorage = await initializeFirestoreStorage();
-    firestoreUsers = remoteStorage.users;
-    firestoreSnapshots = remoteStorage.snapshots.sort((a, b) => (
+  if (isRemoteStorageEnabled()) {
+    const storedData = await remoteStorage.initializeStorage();
+    remoteUsers = storedData.users;
+    remoteSnapshots = storedData.snapshots.sort((a, b) => (
       String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
     ));
-    activityRuns.push(...(remoteStorage.activityRuns || []));
-    console.log(`Používá se Firestore (${firestoreSnapshots.length} snapshotů, ${firestoreUsers.length} uživatelů).`);
+    activityRuns.push(...(storedData.activityRuns || []));
+    console.log(`Používá se ${remoteStorage.label} (${remoteSnapshots.length} snapshotů, ${remoteUsers.length} uživatelů).`);
   }
 
   const restoredActivity = readLatestActivityEntries();
@@ -2754,3 +2753,21 @@ startServer().catch((error) => {
   console.error(`Spuštění serveru selhalo: ${error.message}`);
   process.exitCode = 1;
 });
+
+async function shutdown(signal) {
+  console.log(`Ukončuji server (${signal}).`);
+  if (server.listening) {
+    await new Promise((resolve) => server.close(resolve));
+  }
+  if (typeof remoteStorage?.close === "function") {
+    await remoteStorage.close();
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    shutdown(signal)
+      .catch((error) => console.error(`Ukončení serveru selhalo: ${error.message}`))
+      .finally(() => process.exit());
+  });
+}

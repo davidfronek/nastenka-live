@@ -59,6 +59,40 @@ npm run firestore:import
 
 Po importu spust server se stejnymi promennymi prostredi. Firestore rezim uklada uzivatele, snapshoty i aktivitu; pri vypnutem `STORAGE_PROVIDER` zustava puvodni lokalni chovani.
 
+## PostgreSQL
+
+PostgreSQL rezim uklada uzivatele, snapshoty a historii aktivity do databaze. Stav plochy se pri startu obnovi z posledniho snapshotu stejne jako v lokalnim a Firestore rezimu.
+
+Databazi a samostatneho uzivatele lze na serveru zalozit jako PostgreSQL administrator:
+
+```sql
+CREATE USER nastenka_live WITH PASSWORD 'nahodne-dlouhe-heslo';
+CREATE DATABASE nastenka_live OWNER nastenka_live;
+```
+
+V serverovem prostredi aplikace nastav:
+
+```dotenv
+STORAGE_PROVIDER=postgres
+DATABASE_URL=postgresql://nastenka_live:heslo@127.0.0.1:5432/nastenka_live
+```
+
+Pro vzdalenou databazi vyzadujici TLS pridej `PGSSLMODE=require`. Heslo ani cele `DATABASE_URL` neukladej do repozitare. Pri nasazeni pres VPS dashboard patri promenne do editoru prostredi domeny `nastenka-live.onremote.cz`.
+
+Schema v `database/schema.sql` se vytvori automaticky pri startu. Lze je pripravit i samostatne:
+
+```bash
+npm run postgres:init
+```
+
+Jednorazovy import existujicich lokalnich JSON dat spust pred prvnim produkcnim startem v PostgreSQL rezimu:
+
+```bash
+npm run postgres:import
+```
+
+Import prevadi `data/users.json`, vsechny soubory snapshotu a behy aktivity. Opakovane spusteni aktualizuje zaznamy se stejnym ID.
+
 ## Export a analyza historie
 
 Administratori maji v `admin.html` panel `Analýza live feedu`. Umoznuje hledat v historickych udalostech podle textu, uzivatele a data a stahnout:
