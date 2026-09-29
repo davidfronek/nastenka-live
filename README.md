@@ -93,6 +93,16 @@ npm run postgres:import
 
 Import prevadi `data/users.json`, vsechny soubory snapshotu a behy aktivity. Opakovane spusteni aktualizuje zaznamy se stejnym ID.
 
+Pokud byla PostgreSQL databaze aktivovana bez importu uzivatelu, zaloz nebo obnov administratora primo na serveru. Heslo se cte skryte a neposila se jako argument procesu:
+
+```bash
+read -rsp 'Heslo: ' ADMIN_PASSWORD && echo
+printf '%s' "$ADMIN_PASSWORD" | npm run postgres:create-admin -- admin admin@example.cz
+unset ADMIN_PASSWORD
+```
+
+Prvni argument je zobrazovane jmeno, druhy prihlasovaci e-mail. Existujici ucet se stejnym e-mailem dostane nove heslo a roli administratora.
+
 ## Export a analyza historie
 
 Administratori maji v `admin.html` panel `Analýza live feedu`. Umoznuje hledat v historickych udalostech podle textu, uzivatele a data a stahnout:

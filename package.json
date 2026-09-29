@@ -11,7 +11,8 @@
     "users:import": "node scripts/import-users.js",
     "firestore:import": "node scripts/import-firestore.js",
     "postgres:init": "node scripts/init-postgres.js",
-    "postgres:import": "node scripts/import-postgres.js"
+    "postgres:import": "node scripts/import-postgres.js",
+    "postgres:create-admin": "node scripts/create-postgres-admin.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
